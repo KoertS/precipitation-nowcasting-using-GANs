@@ -9,3 +9,6 @@ I added a condition channel to the architecture with the condition being the cla
 Things to try out: 
 - Add [Shaply](https://github.com/slundberg/shap) values
 - Use wandb to gain more insight in the training process
+- Save and load model
+- Minibatch discrimination
+- Adding noise, label smoothing
