@@ -28,7 +28,7 @@ def make_dir(dir_name):
 
 # Replace 'YEAR' with a year to get download url of the given year
 base_url = 'http://opendap.knmi.nl/knmi/thredds/fileServer/radarprecipclim/RAD_NL25_RAC_MFBS_EM_5min_NC/RAD_NL25_RAC_MFBS_EM_5min_YEAR_NETCDF.zip'
-output_dir='dataset_MFBS'
+output_dir='/nobackup/users/schreurs/project_GAN/dataset_aart'
 make_dir(output_dir)
 
 # Create list of year strings
