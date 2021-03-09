@@ -132,6 +132,7 @@ class DataGenerator(keras.utils.Sequence):
         return np.pad(array, pad_width=npad, mode='constant', constant_values=0)
 
 
+
 def get_list_IDs(start_dt, end_dt,x_seq_size=3,y_seq_size=1):
     '''
     This function returns filenames between the a starting date and end date. 
