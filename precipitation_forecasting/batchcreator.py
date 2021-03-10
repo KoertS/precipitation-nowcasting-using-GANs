@@ -133,7 +133,7 @@ class DataGenerator(keras.utils.Sequence):
 
 
 
-def get_list_IDs(start_dt, end_dt,x_seq_size=3,y_seq_size=1):
+def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=False):
     '''
     This function returns filenames between the a starting date and end date. 
     The filenames are packed into input and output arrays.
@@ -141,14 +141,30 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=3,y_seq_size=1):
     end_dt: end date time
     x_seq_size: size of the input sequence
     y_seq_size: size of the output sequence
+    filter_no_rain: boolean that indicates wether to discard input data were a scan has no rain
     '''
+    label_dir = '/nobackup/users/schreurs/project_GAN/rtcor_rain_labels'
+    
     # Create list of IDs to retrieve
     dts = np.arange( start_dt, end_dt, timedelta(minutes=5*x_seq_size)).astype(datetime)
     # Convert to filenames
-    list_IDs = [get_filenames_xy(dt,x_seq_size,y_seq_size) for dt in dts]
+    list_IDs = []
+    for dt in dts:
+        list_ID = xs, ys =  get_filenames_xy(dt,x_seq_size,y_seq_size)
+        
+        if filter_no_rain:  
+            try:
+                has_rain = not any([np.load(label_dir+ '/{}.npy'.format(file)) for file in xs])
+            except:
+                has_rain = False
+    
+            if has_rain:
+                list_IDs.append(list_ID)
+        else:
+            list_IDs.append(list_ID)
     return list_IDs 
 
-def get_filenames_xy(dt, x_size=3, y_size=1):
+def get_filenames_xy(dt, x_size=5, y_size=1):
     '''
     Returns the filenames of the input x and target y. 
     dt: datetime of sample (year month day hour minute)
