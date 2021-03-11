@@ -12,8 +12,8 @@ class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, list_IDs, batch_size=32, 
                  img_dim = (765, 700, 1), x_seq_size=3, y_seq_size=1, shuffle=True,
-                x_path = '/nobackup/users/schreurs/project_GAN/dataset_radar_np',
-                y_path = '/nobackup/users/schreurs/project_GAN/dataset_aart_np',
+                x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar_np',
+                y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart_np',
                 normalize_y=False, crop_y=True, pad_x=True):
         'Initialization'
         self.inp_shape = (x_seq_size, *img_dim)
@@ -143,7 +143,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
     y_seq_size: size of the output sequence
     filter_no_rain: boolean that indicates wether to discard input data were a scan has no rain
     '''
-    label_dir = '/nobackup/users/schreurs/project_GAN/rtcor_rain_labels'
+    label_dir = '/nobackup_1/users/schreurs/project_GAN/rtcor_rain_labels'
     
     # Create list of IDs to retrieve
     dts = np.arange( start_dt, end_dt, timedelta(minutes=5*x_seq_size)).astype(datetime)
