@@ -210,8 +210,11 @@ class GAN(tf.keras.Model):
         self.g_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)   
         
         self.loss_fn = tf.keras.losses.BinaryCrossentropy()
+        self.loss_mse = tf.keras.losses.MeanSquaredError()
+        
         self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
+        self.mse_metric = tf.keras.metrics.Mean(name="mse")
     
     def call(self, x):
         """Run the model."""
@@ -259,14 +262,18 @@ class GAN(tf.keras.Model):
         # of the discriminator)!
         with tf.GradientTape() as tape:
             predictions = self.discriminator(self.generator(xs))
-            g_loss = self.loss_fn(misleading_labels, predictions)
+            g_loss_gan = self.loss_fn(misleading_labels, predictions)
+            g_loss_mse = self.loss_mse(ys, predictions)
+            g_loss = g_loss_gan + g_loss_mse
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
-        self.g_loss_metric.update_state(g_loss)
+        self.g_loss_metric.update_state(g_loss_gan)
+        self.mse_metric.update_state(g_loss_mse)
         return {
             "d_loss": self.d_loss_metric.result(),
             "g_loss": self.g_loss_metric.result(),
+            "mse_loss": self.mse_metric.result()
         }
