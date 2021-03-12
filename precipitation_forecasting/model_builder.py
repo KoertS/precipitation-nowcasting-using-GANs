@@ -10,13 +10,13 @@ def get_mask_y():
     This function returns the approriate mask to mask the output
     '''
     
-    path_mask = '/nobackup/users/schreurs/project_GAN/KNMI_Internship_GANs/precipitation_forecasting/mask.npy'
+    path_mask = '/usr/people/schreurs/KNMI_Internship_GANs/precipitation_forecasting/mask.npy'
 
     if os.path.isfile(path_mask):
         mask = np.load(path_mask)
     else:
         # Get the mask for the input data
-        y_path = '/nobackup/users/schreurs/project_GAN/dataset_aart'
+        y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart'
         # The mask is the same for all radar scans, so simply chose a random one to get the mask
         path = y_path + '/RAD_NL25_RAC_MFBS_EM_5min_201901010000.nc'
 
@@ -203,14 +203,23 @@ class GAN(tf.keras.Model):
         self.generator = build_generator()
  
     
-    def compile(self, d_optimizer, g_optimizer, loss_fn):
+    def compile(self, optimizer='adam'):
         super(GAN, self).compile()
-        self.d_optimizer = d_optimizer
-        self.g_optimizer = g_optimizer
-        self.loss_fn = loss_fn
-        self.d_loss_metric = keras.metrics.Mean(name="d_loss")
-        self.g_loss_metric = keras.metrics.Mean(name="g_loss")
+        
+        self.d_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
+        self.g_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)   
+        
+        self.loss_fn = tf.keras.losses.BinaryCrossentropy()
+        self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
+        self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
+    
+    def call(self, x):
+        """Run the model."""
+        y_pred = self.generator(x)
+        return y_pred
 
+    
+    
     @property
     def metrics(self):
         return [self.d_loss_metric, self.g_loss_metric]
@@ -229,8 +238,9 @@ class GAN(tf.keras.Model):
         labels = tf.concat(
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
+        
         # Add random noise to the labels - important trick!
-        labels += 0.05 * tf.random.uniform(tf.shape(labels))
+        #labels += 0.05 * tf.random.uniform(tf.shape(labels))
 
         # Train the discriminator
         with tf.GradientTape() as tape:
@@ -241,16 +251,14 @@ class GAN(tf.keras.Model):
             zip(grads, self.discriminator.trainable_weights)
         )
 
-        # Sample random points in the latent space
-        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
-
+      
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
 
         # Train the generator (note that we should *not* update the weights
         # of the discriminator)!
         with tf.GradientTape() as tape:
-            predictions = self.discriminator(self.generator(random_latent_vectors))
+            predictions = self.discriminator(self.generator(xs))
             g_loss = self.loss_fn(misleading_labels, predictions)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
