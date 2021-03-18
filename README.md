@@ -9,5 +9,12 @@ In [this folder](https://github.com/KoertS/KNMI_Internship_GANs/tree/main/dcgan_
 The [model_builder](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/model_builder.py) is used to create a model. Currently I implemented a GAN model that is based the paper from [Tian et al.](https://ieeexplore.ieee.org/abstract/document/8777193) on precipitation nowcasting. 
 In [this](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/testrun.ipynb) notebook I perform a test run to get an idea of the training time.
 
+### Clutter
+
+The find locations where clutter tends to happen, I looked at the probability that pixels exceed certain rain intensity thresholds
+
+![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_03mm.png)
+![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_3mm.png)
+![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_30mm.png)
 ## Paper
 Work in progress of the paper I'm writing can be found in [overleaf](https://www.overleaf.com/read/nqbdxkjnnqyv).
