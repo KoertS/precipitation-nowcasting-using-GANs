@@ -14,8 +14,19 @@ class DataGenerator(keras.utils.Sequence):
                  img_dim = (765, 700, 1), x_seq_size=3, y_seq_size=1, shuffle=True,
                 x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar_np',
                 y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart_np',
-                normalize_y=False, crop_y=True, pad_x=True):
-        'Initialization'
+                norm_method=None, crop_y=True, pad_x=True):
+        '''
+        list_IDs: pair of input and target filenames
+        batch_size: size of batch to generate
+        x_seq_size: length of input sequence
+        y_seq_size: length of target sequence 
+        shuffle: if true than shuffle the batch
+        x_path: path to input data
+        y_path: path to target data
+        norm_method: string that states what normalization method to use: 'minmax' or 'znorm'
+        crop_y: if true then crop around the netherlands, halving the image size
+        pad_x: adds 3 empty rows to input data to make it divisible by 2
+        '''
         self.inp_shape = (x_seq_size, *img_dim)
         self.out_shape = (y_seq_size, *img_dim)
         self.batch_size = batch_size
@@ -24,9 +35,13 @@ class DataGenerator(keras.utils.Sequence):
         self.on_epoch_end()
         self.x_path = x_path
         self.y_path = y_path
-        self.normalize_y = normalize_y
         
-
+        # Normalize
+        self.norm_method = norm_method
+        if norm_method != 'minmax' and norm_method != 'zscore':
+            print('Unknown normalization method. Options are \'minmax\' and \'zscore\'')
+            print('Normalization method has been set to None')
+            self.norm_method = None
         self.crop_y = crop_y
         self.pad_x = pad_x
         
@@ -74,8 +89,13 @@ class DataGenerator(keras.utils.Sequence):
                 
         if self.pad_x:
             X = self.pad_along_axis(X)
-        if self.normalize_y:
+        
+        if self.norm_method == 'zscore':
             y = self.zscore(y)
+            
+        if self.norm_method == 'minmax':
+            X = self.minmax(X)
+            y = self.minmax(y)
         
         if self.crop_y:
             y = self.crop_center(y)
@@ -109,6 +129,19 @@ class DataGenerator(keras.utils.Sequence):
         STD = 37.88184326601481
 
         return (x-MEAN)/STD
+    
+    def minmax(self,x):
+        # pixel values are in 0.01mm
+        # define max intensity as 100mm
+        MIN=0
+        MAX=10000
+        
+        # Set values over 100mm/h to 100mm/h
+        x = np.clip(x, MIN, MAX)
+        
+        x = (x - MIN)/(MAX - MIN)
+      
+        return x
     
     def crop_center(self, img,cropx=350,cropy=384):
         # batch size, sequence, height, width, channels
