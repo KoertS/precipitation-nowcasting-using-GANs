@@ -11,10 +11,19 @@ In [this](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation
 
 ### Clutter
 
-The find locations where clutter tends to happen, I looked at the probability that pixels exceed certain rain intensity thresholds
+The find locations where clutter tends to happen, I looked at the probability that pixels exceed certain rain intensity thresholds.
+#### rtcor dataset:
+Prob > 0.3mm             |  Prob > 3.0mm  |        Prob > 30.0mm                
+:-------------------------:|:-------------------------:|:---------------:|
+![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_03mm.png)  |  ![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_3mm.png) |![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_30mm.png)
 
-![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_03mm.png)
-![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_3mm.png)
-![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/freq_above_30mm.png)
+
+#### Aart dataset:
+Prob > 0.3mm             |  Prob > 3.0mm  |        Prob > 30.0mm                
+:-------------------------:|:-------------------------:|:---------------:|
+![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/aart_freq_above_03mm.png)  |  ![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/aart_freq_above_3mm.png) |![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/aart_freq_above_30mm.png)
+
+
+
 ## Paper
 Work in progress of the paper I'm writing can be found in [overleaf](https://www.overleaf.com/read/nqbdxkjnnqyv).
