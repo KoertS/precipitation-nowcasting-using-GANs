@@ -23,7 +23,9 @@ Prob > 0.3mm             |  Prob > 3.0mm  |        Prob > 30.0mm
 :-------------------------:|:-------------------------:|:---------------:|
 ![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/aart_freq_above_03mm.png)  |  ![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/aart_freq_above_3mm.png) |![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/figures/aart_freq_above_30mm.png)
 
+An other way to detect clutter is by looking at the gradient of the radar image. Rainfall tends to gradually increase from low to high precipitation values, while clutter can lead to sudden increases and decreases in radar reflectively. However removing these spikes is not a straightforward procedure, as clouds can move through areas that contain clutter and occasionally clouds also contain high gradients. This makes it difficult to discard pixels based on the magnitude of their gradient. 
 
+![image](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/gif/july7clutter.gif)
 
 ## Paper
 Work in progress of the paper I'm writing can be found in [overleaf](https://www.overleaf.com/read/nqbdxkjnnqyv).
