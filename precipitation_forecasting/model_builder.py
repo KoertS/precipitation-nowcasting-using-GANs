@@ -2,6 +2,10 @@ import tensorflow as tf
 import numpy as np
 import netCDF4
 import os
+import sys
+sys.path.insert(0,'..')
+from ConvGRU2D import ConvGRU2D
+
 
 def get_mask_y():
     '''
@@ -40,8 +44,23 @@ def crop_center(img,cropx=350,cropy=384):
 
 # Based upon the paper by Tian. Used convLSTM instead of ConvGRU for now as the latter is not available in keras. 
 # This can later still be implemented.
+def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='same', return_sequences=True, 
+                  name=None, leakyrelu_alpha=0.2, ):
+    if rnn_type == 'GRU':
+        x = ConvGRU2D.ConvGRU2D(name=name, filters=filters, kernel_size=kernel_size, 
+                                              strides=strides,
+                                              padding=padding, 
+                                              return_sequences=return_sequences)(x)   
+    if rnn_type == 'LSTM':
+        x = tf.keras.layers.ConvLSTM2D(name=name, filters=filters, kernel_size=kernel_size, 
+                                              strides=strides,
+                                              padding=padding, 
+                                              return_sequences=return_sequences)(x)   
+    x = tf.keras.layers.LeakyReLU(leakyrelu_alpha)(x)
+    return x
 
-def encoder(x):
+
+def encoder(x, rnn_type):
   # Downsample 1a
   x = tf.keras.layers.Conv3D(filters=8, kernel_size=(1,3,3), strides=(1,2,2), padding='same', name='Downsample1a')(x)
   x = tf.keras.layers.LeakyReLU(0.2)(x)
@@ -51,66 +70,40 @@ def encoder(x):
   x = tf.keras.layers.LeakyReLU(0.2)(x)   
 
   # RNN block 1
-  x = tf.keras.layers.ConvLSTM2D(name='ConvLSTM1a', filters=64, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
-
-  x = tf.keras.layers.ConvLSTM2D(name='ConvLSTM1b', filters=64, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
-
+  x = convRNN_block(x, rnn_type=rnn_type, filters=64, kernel_size=(3, 3), 
+                                          strides=(1,1), name='Conv{}1a'.format(rnn_type))
+  
+  x = convRNN_block(x, rnn_type=rnn_type, filters=64, kernel_size=(3, 3), 
+                                          strides=(1,1), name='Conv{}1b'.format(rnn_type))
+    
   # Downsample 2
   x = tf.keras.layers.Conv2D( name='Downsample2', filters=64, kernel_size=(5, 5), strides=(3,3), padding='same')(x)
   x = tf.keras.layers.LeakyReLU(0.2)(x)
 
   # RNN block 2
-  x = tf.keras.layers.ConvLSTM2D(name='ConvLSTM2a', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
+  x = convRNN_block(x, rnn_type=rnn_type, filters=192, kernel_size=(3, 3), 
+                                          strides=(1,1), name='Conv{}2a'.format(rnn_type))
 
-  x = tf.keras.layers.ConvLSTM2D(name='ConvLSTM2b', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)  
-
+  x = convRNN_block(x, rnn_type=rnn_type, filters=192, kernel_size=(3, 3), 
+                                          strides=(1,1), name='Conv{}2b'.format(rnn_type))
+    
   # Downsample 3
   x = tf.keras.layers.Conv2D( name='Downsample3', filters=192, kernel_size=(3, 3), strides=(2,2), padding='same')(x)
   x = tf.keras.layers.LeakyReLU(0.2)(x)
 
   # RNN block 2
-  x = tf.keras.layers.ConvLSTM2D(name='ConvLSTM3a', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
-
-  x = tf.keras.layers.ConvLSTM2D(name='ConvLSTM3b', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)  
+  x = convRNN_block(x, rnn_type=rnn_type, filters=192, kernel_size=(3, 3), 
+                                          strides=(1,1), name='Conv{}3a'.format(rnn_type))
+  x = convRNN_block(x, rnn_type=rnn_type, filters=192, kernel_size=(3, 3), 
+                                          strides=(1,1), name='Conv{}3b'.format(rnn_type))
   return x
 
-def decoder(x):
+def decoder(x, rnn_type):
   # Decoder block 1
-  x = tf.keras.layers.ConvLSTM2D(name='Decoder_Block1_ConvLSTM_1', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
-
-  x = tf.keras.layers.ConvLSTM2D(name='Decoder_Block1_ConvLSTM_2', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)  
+  x = convRNN_block(x, rnn_type= rnn_type, filters=192, kernel_size=(3, 3), 
+                                              strides=(1,1), name='Conv{}_decoder_1a'.format(rnn_type))
+  x = convRNN_block(x, rnn_type= rnn_type, filters=192, kernel_size=(3, 3), 
+                                              strides=(1,1), name='Conv{}_decoder_1b'.format(rnn_type))
 
   # Upsample 
   x = tf.keras.layers.Conv3DTranspose( name='Upsample1', filters=192, kernel_size=(1,4, 4), strides=(1,2,2), padding='same')(x)
@@ -119,34 +112,23 @@ def decoder(x):
   x = tf.keras.layers.LeakyReLU(0.2)(x)
 
   # Decoder block2
-  x = tf.keras.layers.ConvLSTM2D(name='Decoder_Block2_ConvLSTM_1', filters=192, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
+  x = convRNN_block(x, rnn_type= rnn_type, filters=192, kernel_size=(3, 3), 
+                                              strides=(1,1), name='Conv{}_decoder_2a'.format(rnn_type))
 
-  x = tf.keras.layers.ConvLSTM2D(name='Decoder_Block2_ConvLSTM_2', filters=192, kernel_size=(5, 5), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)  
+  x = convRNN_block(x, rnn_type= rnn_type, filters=192, kernel_size=(5, 5), 
+                                              strides=(1,1), name='Conv{}_decoder_2b'.format(rnn_type))
 
   # Upsample 
   x = tf.keras.layers.Conv3DTranspose( name='Upsample2', filters=192, kernel_size=(1,5, 5), strides=(1,3,3), padding='same')(x)
   x = tf.keras.layers.Cropping3D(cropping=(0, 0, 1))(x)
   x = tf.keras.layers.LeakyReLU(0.2)(x)
 
-  x = tf.keras.layers.ConvLSTM2D(name='Decoder_Block3_ConvLSTM_1', filters=64, kernel_size=(3, 3), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=True)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)
+  # Decoder block3
+  x = convRNN_block(x, rnn_type= rnn_type, filters=64, kernel_size=(3, 3), 
+                                              strides=(1,1), name='Conv{}_decoder_3a'.format(rnn_type))
 
-  x = tf.keras.layers.ConvLSTM2D(name='Decoder_Block3_ConvLSTM_2', filters=64, kernel_size=(5, 5), 
-                                          strides=(1,1),
-                                          padding='same', 
-                                          return_sequences=False)(x)
-  x = tf.keras.layers.LeakyReLU(0.2)(x)  
+  x = convRNN_block(x, rnn_type= rnn_type, filters=64, kernel_size=(5, 5), 
+                                              strides=(1,1), return_sequences = False, name='Conv{}_decoder_3b'.format(rnn_type))
 
   # Upsample to target resolution
   x = tf.keras.layers.Conv2DTranspose( name='Upsample3', filters=8, kernel_size=(5, 5), strides=(2,2), padding='same')(x)
@@ -157,11 +139,11 @@ def decoder(x):
   return x  
 
 
-def build_generator():
+def build_generator(rnn_type):
     input_seq = tf.keras.Input(shape=(5, 768, 700, 1))
 
-    x = encoder(input_seq)
-    x = decoder(x)
+    x = encoder(input_seq, rnn_type)
+    x = decoder(x, rnn_type)
     
     # Apply mask to output
     output = tf.keras.layers.Multiply(name='Mask')([x, get_mask_y()])
@@ -197,10 +179,10 @@ def build_discriminator():
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self):
-        super(GAN, self).__init__()
+    def __init__(self, rnn_type='GRU'):
+        super(GAN, self).__init__()      
         self.discriminator = build_discriminator()
-        self.generator = build_generator()
+        self.generator = build_generator(rnn_type)
  
     
     def compile(self, optimizer='adam'):
@@ -277,3 +259,4 @@ class GAN(tf.keras.Model):
             "g_loss": self.g_loss_metric.result(),
             "mse_loss": self.mse_metric.result()
         }
+    
