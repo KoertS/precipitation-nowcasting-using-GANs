@@ -6,14 +6,14 @@ from datetime import datetime, timedelta
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-
+import h5py
+from netCDF4 import Dataset
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, list_IDs, batch_size=32, 
-                 img_dim = (765, 700, 1), x_seq_size=3, y_seq_size=1, shuffle=True,
-                x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar_np',
-                y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart_np',
+                 img_dim = (765, 700, 1), x_seq_size=6, y_seq_size=24, shuffle=True,
+                load_from_npy=True,
                 norm_method=None, crop_y=True, pad_x=True):
         '''
         list_IDs: pair of input and target filenames
@@ -23,6 +23,7 @@ class DataGenerator(keras.utils.Sequence):
         shuffle: if true than shuffle the batch
         x_path: path to input data
         y_path: path to target data
+        load_from_npy: specifies if the generator should load the nc/h5 files and convert to numpy or load the numpy files directly
         norm_method: string that states what normalization method to use: 'minmax' or 'znorm'
         crop_y: if true then crop around the netherlands, halving the image size
         pad_x: adds 3 empty rows to input data to make it divisible by 2
@@ -33,12 +34,19 @@ class DataGenerator(keras.utils.Sequence):
         self.list_IDs = list_IDs
         self.shuffle = shuffle
         self.on_epoch_end()
-        self.x_path = x_path
-        self.y_path = y_path
+        self.load_from_npy = load_from_npy
+
         
+        self.x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar'
+        self.y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart'     
+        if self.load_from_npy:
+            self.x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar_np'
+            self.y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart_np'
+             
+   
         # Normalize
         self.norm_method = norm_method
-        if norm_method != 'minmax' and norm_method != 'zscore':
+        if norm_method and norm_method != 'minmax' and norm_method != 'zscore':
             print('Unknown normalization method. Options are \'minmax\' and \'zscore\'')
             print('Normalization method has been set to None')
             self.norm_method = None
@@ -101,10 +109,56 @@ class DataGenerator(keras.utils.Sequence):
             y = self.crop_center(y)
         return X, y
     
+    def load_h5(self, path):
+        '''
+        The orginial input images are stored in .h5 files. 
+        This function loads them and converts them to numpy arrays
+        '''
+        radar_img = None
+        with h5py.File(path, 'r') as f:
+            try:
+                radar_img = f['image1']['image_data'][:]
+
+                ## Set pixels out of image to 0
+                out_of_image = f['image1']['calibration'].attrs['calibration_out_of_image']
+                radar_img[radar_img == out_of_image] = 0
+                # Sometimes 255 or other number (244) is used for the calibration
+                # for out of image values, so also check the first pixel
+                radar_img[radar_img == radar_img[0][0]] = 0
+            except:
+                print("Error: could not read image1 data, file {}".format(path))
+        return radar_img
+    
+    def load_nc(self, path, as_int=True):
+        '''
+        The target images are stored as .nc files. 
+        This function loads and converts the images to numpy arrays
+        '''
+        radar_img = None
+        with Dataset(path, mode='r') as f:
+            try:
+                radar_img = f['image1_image_data'][:][0].data
+                mask = f['image1_image_data'][:][0].mask
+                
+                # apply mask:
+                radar_img = radar_img * ~mask
+                
+                if as_int:
+                    radar_img *=100
+                    radar_img = radar_img.astype(int)
+            except:
+                print("Error: could not read image data, file {}".format(path))
+        return radar_img
+   
+        
     def load_x(self, x_ID):
-        path = self.x_path + '/{}.npy'.format(x_ID)
-      
-        rain = np.load(path)
+        if self.load_from_npy:
+            path = self.x_path + '/{}.npy'.format(x_ID)
+            rain = np.load(path)
+        else:
+            path = self.x_path + '/RAD_NL25_RAC_RT_{}.h5'.format(x_ID)
+            rain = self.load_h5(path)   
+            
         # set masked values to 0
         rain[rain == 65535] = 0
         # Expand dimensions from (w,h) to (w,h,c=1)
@@ -113,9 +167,12 @@ class DataGenerator(keras.utils.Sequence):
         return rain
         
     def load_y(self, y_ID):
-        path = self.y_path + '/{}.npy'.format(y_ID)
-
-        rain = np.load(path)
+        if self.load_from_npy:
+            path = self.y_path + '/{}.npy'.format(y_ID)
+            rain = np.load(path)
+        else:
+            path = self.y_path + '/RAD_NL25_RAC_MFBS_EM_5min_{}.nc'.format(y_ID)
+            rain = self.load_nc(path)
         # set masked values to 0
         # Note that the data was converted to integers by multiplying with 100
         rain[rain == 65535*100] = 0
@@ -187,7 +244,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
         
         if filter_no_rain:  
             try:
-                has_rain = not any([np.load(label_dir+ '/{}.npy'.format(file)) for file in xs])
+                has_rain = all([np.load(label_dir+ '/{}.npy'.format(file)) for file in xs])
             except:
                 has_rain = False
     
