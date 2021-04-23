@@ -9,8 +9,7 @@ import h5py
 radar_dir = '/ceph/csedu-scratch/project/kschreurs/dataset_radar/'
 label_dir = '/ceph/csedu-scratch/project/kschreurs/rtcor_rain_labels/'
 
-
-files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f.startswith('2019')])
+files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f[16:20] == '2019' and f.endswith('.h5')])
 
 def is_rainy(rdr):
     cluttermask = ~np.load('cluttermask.npy')
@@ -63,7 +62,8 @@ for f in tqdm(files):
     try:
         rdr = load_h5(radar_dir+f)
         rainy = is_rainy(rdr)
-    except:
+    except Exception as e:
+        print(e)
         rainy = False
         
     label_fn = label_dir + f
