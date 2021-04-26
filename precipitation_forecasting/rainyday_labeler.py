@@ -11,9 +11,8 @@ label_dir = '/ceph/csedu-scratch/project/kschreurs/rtcor_rain_labels/'
 
 files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f[16:20] == '2019' and f.endswith('.h5')])
 
-def is_rainy(rdr):
-    cluttermask = ~np.load('cluttermask.npy')
-    
+cluttermask = ~np.load('cluttermask.npy')
+def is_rainy(rdr):    
     # Calculate gradien magnitudes
     vgrad= np.gradient(rdr)
     mag = np.sqrt(vgrad[0]**2 + vgrad[1]**2)
