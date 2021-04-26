@@ -5,7 +5,7 @@ import matplotlib.cm as cm
 import netCDF4
 from pyproj import Proj, transform
 from mpl_toolkits.basemap import Basemap
-
+import config
 
 def plot_on_map(rdr, ftype='.nc', res='l'):
     '''
@@ -15,7 +15,7 @@ def plot_on_map(rdr, ftype='.nc', res='l'):
     res: resolution, can be c (crude), l (low), i (intermediate), h (high), f (full) 
     '''
     
-    dir_aart = '/nobackup_1/users/schreurs/project_GAN/dataset_aart/'
+    dir_aart = config.dir_aart
     aart_fbase = 'RAD_NL25_RAC_MFBS_EM_5min_'
     proj = Proj("+proj=stere +lat_0=90 +lon_0=0.0 +lat_ts=60.0 +a=6378.137 +b=6356.752 +x_0=0 +y_0=0")
     
@@ -40,7 +40,7 @@ def plot_on_map(rdr, ftype='.nc', res='l'):
             mask = rain.mask
     
     if  ftype == '.h5':
-        dir_rtcor = '/nobackup_1/users/schreurs/project_GAN/dataset_radar/'
+        dir_rtcor = config.dir_rtcor
         rtcor_fbase = 'RAD_NL25_RAC_RT_'
         path = dir_rtcor + rtcor_fbase + '201901010000.h5'
         with h5py.File(path, 'r') as f:

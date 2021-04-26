@@ -5,16 +5,15 @@ from os import listdir
 from os.path import isfile, join
 from tqdm import tqdm
 import h5py
+import config
 
-radar_dir = '/ceph/csedu-scratch/project/kschreurs/dataset_radar/'
-label_dir = '/ceph/csedu-scratch/project/kschreurs/rtcor_rain_labels/'
+radar_dir =  config.dir_rtcor 
+label_dir = config.dir_labels
 
+files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f[16:20] == '2019' and f.endswith('.h5')])
 
-files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f.startswith('2019')])
-
-def is_rainy(rdr):
-    cluttermask = ~np.load('cluttermask.npy')
-    
+cluttermask = ~np.load('cluttermask.npy')
+def is_rainy(rdr):    
     # Calculate gradien magnitudes
     vgrad= np.gradient(rdr)
     mag = np.sqrt(vgrad[0]**2 + vgrad[1]**2)
@@ -63,7 +62,8 @@ for f in tqdm(files):
     try:
         rdr = load_h5(radar_dir+f)
         rainy = is_rainy(rdr)
-    except:
+    except Exception as e:
+        print(e)
         rainy = False
         
     label_fn = label_dir + f

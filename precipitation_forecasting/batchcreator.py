@@ -8,6 +8,8 @@ import tensorflow as tf
 from tensorflow import keras
 import h5py
 from netCDF4 import Dataset
+import config
+
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
@@ -37,11 +39,11 @@ class DataGenerator(keras.utils.Sequence):
         self.load_from_npy = load_from_npy
 
         
-        self.x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar'
-        self.y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart'     
+        self.x_path = config.dir_rtcor
+        self.y_path = config.dir_aart 
         if self.load_from_npy:
-            self.x_path = '/nobackup_1/users/schreurs/project_GAN/dataset_radar_np'
-            self.y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart_np'
+            self.x_path = config.dir_rtcor_npy
+            self.y_path = config.dir_aart_npy
              
    
         # Normalize
@@ -233,7 +235,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
     y_seq_size: size of the output sequence
     filter_no_rain: boolean that indicates wether to discard input data were a scan has no rain
     '''
-    label_dir = '/nobackup_1/users/schreurs/project_GAN/rtcor_rain_labels'
+    label_dir = config.dir_labels
     
     # Create list of IDs to retrieve
     dts = np.arange( start_dt, end_dt, timedelta(minutes=5*x_seq_size)).astype(datetime)
