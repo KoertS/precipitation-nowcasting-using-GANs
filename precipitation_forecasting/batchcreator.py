@@ -42,8 +42,8 @@ class DataGenerator(keras.utils.Sequence):
         self.x_path = config.dir_rtcor
         self.y_path = config.dir_aart 
         if self.load_from_npy:
-            self.x_path = config.dir_rtcor_np
-            self.y_path = config.dir_aart_np
+            self.x_path = config.dir_rtcor_npy
+            self.y_path = config.dir_aart_npy
              
    
         # Normalize
