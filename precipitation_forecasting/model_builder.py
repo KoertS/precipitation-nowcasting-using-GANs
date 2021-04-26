@@ -5,7 +5,7 @@ import os
 import sys
 sys.path.insert(0,'..')
 from ConvGRU2D import ConvGRU2D
-
+import config
 
 def get_mask_y():
     '''
@@ -14,13 +14,13 @@ def get_mask_y():
     This function returns the approriate mask to mask the output
     '''
     
-    path_mask = '/usr/people/schreurs/KNMI_Internship_GANs/precipitation_forecasting/mask.npy'
+    path_mask = 'mask.npy'
 
     if os.path.isfile(path_mask):
         mask = np.load(path_mask)
     else:
         # Get the mask for the input data
-        y_path = '/nobackup_1/users/schreurs/project_GAN/dataset_aart'
+        y_path = config.dir_aart
         # The mask is the same for all radar scans, so simply chose a random one to get the mask
         path = y_path + '/RAD_NL25_RAC_MFBS_EM_5min_201901010000.nc'
 

@@ -5,9 +5,10 @@ from os import listdir
 from os.path import isfile, join
 from tqdm import tqdm
 import h5py
+import config
 
-radar_dir = '/ceph/csedu-scratch/project/kschreurs/dataset_radar/'
-label_dir = '/ceph/csedu-scratch/project/kschreurs/rtcor_rain_labels/'
+radar_dir =  config.dir_rtcor 
+label_dir = config.dir_labels
 
 files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f[16:20] == '2019' and f.endswith('.h5')])
 
