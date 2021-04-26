@@ -139,8 +139,8 @@ def decoder(x, rnn_type):
   return x  
 
 
-def build_generator(rnn_type):
-    input_seq = tf.keras.Input(shape=(5, 768, 700, 1))
+def build_generator(rnn_type, x_length=6):
+    input_seq = tf.keras.Input(shape=(x_length, 768, 700, 1))
 
     x = encoder(input_seq, rnn_type)
     x = decoder(x, rnn_type)
@@ -151,8 +151,8 @@ def build_generator(rnn_type):
     model = tf.keras.Model(inputs=input_seq, outputs=output, name='Generator')
     return model
 
-def build_discriminator():
-    input_seq = tf.keras.Input(shape=(1, 384, 350, 1))
+def build_discriminator(y_length=1):
+    input_seq = tf.keras.Input(shape=(y_length, 384, 350, 1))
     
     # Conv1
     x = tf.keras.layers.Conv2D(filters=32, kernel_size=(5,5), strides=(3,3), padding='same', name='Conv1')(input_seq)
@@ -179,10 +179,10 @@ def build_discriminator():
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self, rnn_type='GRU'):
+    def __init__(self, rnn_type='GRU', x_length=6, y_length=1):
         super(GAN, self).__init__()      
-        self.discriminator = build_discriminator()
-        self.generator = build_generator(rnn_type)
+        self.discriminator = build_discriminator(y_length=y_length)
+        self.generator = build_generator(rnn_type, x_length=x_length)
  
     
     def compile(self, optimizer='adam'):
@@ -203,14 +203,15 @@ class GAN(tf.keras.Model):
         y_pred = self.generator(x)
         return y_pred
 
-    
-    
     @property
     def metrics(self):
         return [self.d_loss_metric, self.g_loss_metric]
 
     def train_step(self, batch):
         xs, ys = batch
+        print('train step')
+        print(xs.shape)
+        print(ys.shape)
         batch_size = tf.shape(xs)[0]
 
         # Decode them to fake images
