@@ -209,9 +209,6 @@ class GAN(tf.keras.Model):
 
     def train_step(self, batch):
         xs, ys = batch
-        print('train step')
-        print(xs.shape)
-        print(ys.shape)
         batch_size = tf.shape(xs)[0]
 
         # Decode them to fake images
