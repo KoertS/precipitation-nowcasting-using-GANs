@@ -10,5 +10,5 @@ dir_aart_npy = path_data + 'dataset_aart_np/'
 
 dir_labels = path_data + 'rtcor_rain_labels/'
 
-prefix_rtcor = '/RAD_NL25_RAC_5M_'
+prefix_rtcor = 'RAD_NL25_RAC_5M_'
 prefix_aart = 'RAD_NL25_RAC_MFBS_EM_5min_'
