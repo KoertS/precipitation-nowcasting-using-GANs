@@ -84,11 +84,11 @@ class DataGenerator(keras.utils.Sequence):
         # Initialization
         X = np.empty((self.batch_size, *self.inp_shape))
         y = np.empty((self.batch_size, *self.out_shape))
-        
+
         # Generate data
         for i, IDs in enumerate(list_IDs_temp):
             x_IDs, y_IDs = IDs
-            
+
             # Store input image(s)
             for c in range(self.inp_shape[0]):
                 X[i,c] = self.load_x(x_IDs[c])
@@ -96,13 +96,13 @@ class DataGenerator(keras.utils.Sequence):
             # Store target image(s)
             for c in range(self.out_shape[0]):
                 y[i,c] = self.load_y(y_IDs[c])
-                
+
         if self.pad_x:
             X = self.pad_along_axis(X)
-        
+
         if self.norm_method == 'zscore':
             y = self.zscore(y)
-            
+
         if self.norm_method == 'minmax':
             X = self.minmax(X)
             y = self.minmax(y)
@@ -247,7 +247,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
 
         if filter_no_rain:
             try:
-                has_rain = all([np.load(label_dir+ '{}.npy'.format(file)) for file in xs])
+                has_rain = all([np.load(label_dir+ '{}/{}/{}.npy'.format(file[:4], file[4:6], file)) for file in xs])
             except Exception as e:
                 print(e)
                 has_rain = False

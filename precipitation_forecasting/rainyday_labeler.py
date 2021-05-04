@@ -23,9 +23,6 @@ else:
 radar_dir =  config.dir_rtcor
 label_dir = config.dir_labels
 
-
-
-year = '2019'
 root = radar_dir + year
 files = sorted([name for path, subdirs, files in os.walk(root) for name in files])
 
