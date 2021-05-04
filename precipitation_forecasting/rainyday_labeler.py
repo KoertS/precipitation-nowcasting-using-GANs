@@ -7,10 +7,24 @@ from tqdm import tqdm
 import h5py
 import config
 
+import sys
+
+# Get full command-line arguments
+full_cmd_arguments = sys.argv
+
+year = 0
+if len(full_cmd_arguments) == 2:
+    year = full_cmd_arguments[-1]
+    print('Computing labels for the year {}'.format(year))
+else:
+    print('Missing argument year (example: rainyday_labeler.py 2019)')
+    exit()
+
 radar_dir =  config.dir_rtcor
 label_dir = config.dir_labels
 
-#files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f[16:20] == '2019' and f.endswith('.h5')])
+
+
 year = '2019'
 root = radar_dir + year
 files = sorted([name for path, subdirs, files in os.walk(root) for name in files])
