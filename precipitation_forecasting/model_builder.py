@@ -2,10 +2,10 @@ import tensorflow as tf
 import numpy as np
 import netCDF4
 import os
-import sys
-sys.path.insert(0,'..')
-from ConvGRU2D import ConvGRU2D
 import config
+import sys
+sys.path.insert(0,config.path_project)
+from ConvGRU2D import ConvGRU2D
 from tensorflow.keras.optimizers import Adam
 
 def get_mask_y():
@@ -14,7 +14,7 @@ def get_mask_y():
     The model output should also be masked, such that the output of the masked values becomes zero.
     This function returns the approriate mask to mask the output
     '''
-    
+
     path_mask = 'mask.npy'
 
     if os.path.isfile(path_mask):
@@ -23,7 +23,7 @@ def get_mask_y():
         # Get the mask for the input data
         y_path = config.dir_aart
         # The mask is the same for all radar scans, so simply chose a random one to get the mask
-        path = y_path + '/RAD_NL25_RAC_MFBS_EM_5min_201901010000.nc'
+        path = y_path + config.prefix_aart + '201901010000.nc'
 
         with netCDF4.Dataset(path, 'r') as f:
             rain = f['image1_image_data'][:].data
@@ -39,14 +39,14 @@ def crop_center(img,cropx=350,cropy=384):
      # Only change height and width
     _, y,x, _ = img.shape
     startx = 20+x//2-(cropx//2)
-    starty = 40+y//2-(cropy//2)    
+    starty = 40+y//2-(cropy//2)
     return img[:,starty:starty+cropy,startx:startx+cropx:,]
 
 
 # Based upon the paper by Tian. Used convLSTM instead of ConvGRU for now as the latter is not available in keras. 
 # This can later still be implemented.
 def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='same', return_sequences=True, 
-                  name=None, relu_alpha=0.2, ):
+                  name=None, relu_alpha=0.2):
     if rnn_type == 'GRU':
         x = ConvGRU2D.ConvGRU2D(name=name, filters=filters, kernel_size=kernel_size, 
                                               strides=strides,
@@ -141,7 +141,7 @@ def decoder(x, rnn_type, relu_alpha):
   return x  
 
 
-def build_generator(rnn_type, x_length=6, relu_alpha):
+def build_generator(rnn_type, relu_alpha, x_length=6):
     input_seq = tf.keras.Input(shape=(x_length, 768, 700, 1))
 
     x = encoder(input_seq, rnn_type, relu_alpha)
@@ -153,7 +153,7 @@ def build_generator(rnn_type, x_length=6, relu_alpha):
     model = tf.keras.Model(inputs=input_seq, outputs=output, name='Generator')
     return model
 
-def build_discriminator(y_length=1,relu_alpha):
+def build_discriminator(relu_alpha, y_length=1):
     input_seq = tf.keras.Input(shape=(y_length, 384, 350, 1))
     
     # Conv1
@@ -187,7 +187,7 @@ class GAN(tf.keras.Model):
         self.generator = build_generator(rnn_type, x_length=x_length, relu_alpha=relu_alpha)
  
     
-    def compile(self, optimizer=Adam(learning_rate=0.0001), optimizer_g = Adam(learning_rate=0.0001):
+    def compile(self, optimizer=Adam(learning_rate=0.0001), optimizer_g = Adam(learning_rate=0.0001)):
         super(GAN, self).compile()
         
         self.d_optimizer = optimizer_d
