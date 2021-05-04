@@ -1,6 +1,8 @@
 path_data = '/ceph/knmimo/' 
 # Change the above on KNMI server to: /nobackup_1/users/schreurs/project_GAN/
+
 path_project  = '~/Documents/KNMI_Internship_GANs/'
+# Change the above on the knmi server to: ~/KKNMI_Internship_GANs/
 
 # Global variables that point to the correct directory
 dir_rtcor = path_data + 'dataset_rtcor/' # dataset_radar contains 2019
