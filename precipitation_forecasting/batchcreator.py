@@ -155,10 +155,11 @@ class DataGenerator(keras.utils.Sequence):
         
     def load_x(self, x_ID):
         if self.load_from_npy:
-            path = self.x_path + '/{}.npy'.format(x_ID)
+            path = self.x_path + '{}.npy'.format(x_ID)
             rain = np.load(path)
         else:
-            path = self.x_path + '/RAD_NL25_RAC_RT_{}.h5'.format(x_ID)
+            dt = datetime.strptime(x_ID, '%Y%m%d%H%M')
+            path = self.x_path +  '{Y}/{m:02d}/{prefix}{ts}.h5'.format(Y=dt.year, m=dt.month, prefix = config.prefix_rtcor,  ts=x_ID)
             rain = self.load_h5(path)   
             
         # set masked values to 0
@@ -170,10 +171,10 @@ class DataGenerator(keras.utils.Sequence):
         
     def load_y(self, y_ID):
         if self.load_from_npy:
-            path = self.y_path + '/{}.npy'.format(y_ID)
+            path = self.y_path + '{}.npy'.format(y_ID)
             rain = np.load(path)
         else:
-            path = self.y_path + '/RAD_NL25_RAC_MFBS_EM_5min_{}.nc'.format(y_ID)
+            path = self.y_path + config.prefix_aart + y_ID +'.nc'
             rain = self.load_nc(path)
         # set masked values to 0
         # Note that the data was converted to integers by multiplying with 100
@@ -243,11 +244,12 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
     list_IDs = []
     for dt in dts:
         list_ID = xs, ys =  get_filenames_xy(dt,x_seq_size,y_seq_size)
-        
-        if filter_no_rain:  
+
+        if filter_no_rain:
             try:
-                has_rain = all([np.load(label_dir+ '/{}.npy'.format(file)) for file in xs])
-            except:
+                has_rain = all([np.load(label_dir+ '{}.npy'.format(file)) for file in xs])
+            except Exception as e:
+                print(e)
                 has_rain = False
     
             if has_rain:
