@@ -11,7 +11,8 @@ radar_dir =  config.dir_rtcor
 label_dir = config.dir_labels
 
 #files = sorted([f for f in listdir(radar_dir) if isfile(join(radar_dir, f)) and f[16:20] == '2019' and f.endswith('.h5')])
-root = radar_dir + '2019'
+year = '2019'
+root = radar_dir + year
 files = sorted([name for path, subdirs, files in os.walk(root) for name in files])
 
 cluttermask = ~np.load('cluttermask.npy')
@@ -58,19 +59,23 @@ def make_dir(dir_name):
   '''
   if not os.path.exists(dir_name):
     os.makedirs(dir_name)
-
+# make directories
 make_dir(label_dir)
-for f in tqdm(files):
-    ts = f.replace('RAD_NL25_RAC_RT_', '')
-    ts = ts.replace('.h5', '')
-    label_fn = label_dir +  ts + '.npy'
+make_dir(label_dir+year)
+for m in range (1,13):
+   make_dir(label_dir+year+'/{:02d}'.format(m))
 
-    
+for f in tqdm(files):
+    ts = f.replace(config.prefix_rtcor, '')
+    ts = ts.replace('.h5', '')
+
+    year = ts[:4]
+    month = ts[4:6]
+
+    label_fn = label_dir + '{Y}/{m}/{ts}.npy'.format(Y=year, m=month, ts=ts)
+
     if not os.path.isfile(label_fn):
-        count+=1
         try:
-            year = ts[:4]
-            month = ts[4:6]
             rdr = load_h5(radar_dir+'/{}/{}/{}'.format(year,month,f))
             rainy = is_rainy(rdr)
         except Exception as e:
