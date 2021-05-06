@@ -5,6 +5,7 @@ import os
 import config
 import sys
 sys.path.insert(0,config.path_project)
+sys.path.insert(0,'..')
 from ConvGRU2D import ConvGRU2D
 from tensorflow.keras.optimizers import Adam
 
@@ -60,6 +61,16 @@ def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='sam
     x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
 
+def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, transposed = False ):
+    layer =  tf.keras.layers.Conv2D
+    if transposed:
+        layer = tf.keras.layers.Conv2DTranspose
+ 
+    x = layer(name=name, filters=filters, kernel_size=kernel_size, 
+                                              strides=strides, padding=padding)(x)
+                     
+    x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
+    return x
 
 def encoder(x, rnn_type, relu_alpha):
   # Downsample 1a
@@ -140,17 +151,67 @@ def decoder(x, rnn_type, relu_alpha):
   x = tf.keras.layers.Reshape(target_shape=(1,384, 350, 1))(x)
   return x  
 
+def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1):
+    ''' 
+    This generator uses similar architecture as in AENN
+    AENN paper: 
+    '''
+    # Add padding to make square image
+    x = tf.keras.layers.ZeroPadding3D(padding=(0,0,34))(x)
+        
+    # Encoder:    
+    # Added layer with stride 3 to get to a 256x256 picture
+    x = conv_block(x, filters = 16, kernel_size=3, strides = 3, 
+                      relu_alpha = relu_alpha)
+    
+    x = conv_block(x, filters = 32, kernel_size=5, strides = 2, 
+                      relu_alpha = relu_alpha)
+    x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha) 
+    x = conv_block(x, filters = 128, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha) 
 
-def build_generator(rnn_type, relu_alpha, x_length=6):
-    input_seq = tf.keras.Input(shape=(x_length, 768, 700, 1))
-
-    x = encoder(input_seq, rnn_type, relu_alpha)
-    x = decoder(x, rnn_type, relu_alpha)
+    # RNN part:
+    x = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+                      relu_alpha = relu_alpha,  rnn_type=rnn_type) 
+    x = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+                      relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences=False) 
+    
+    # Decoder:
+    x = conv_block(x, filters = 64, kernel_size=3, strides = 3, 
+                      relu_alpha = relu_alpha, transposed = True)
+    
+    x = conv_block(x, filters = 32, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha, transposed = True)
+    x = conv_block(x, filters = y_length, kernel_size=5, strides = 2, 
+                      relu_alpha = relu_alpha, transposed = True)
+    
+    # Convert to predictions
+    # Crop to fit output shape
+    x = tf.keras.layers.Cropping2D((0,17))(x)
     
     # Apply mask to output
-    output = tf.keras.layers.Multiply(name='Mask')([x, get_mask_y()])
-    
-    model = tf.keras.Model(inputs=input_seq, outputs=output, name='Generator')
+    x = tf.keras.layers.Multiply(name='Mask')([x, get_mask_y()])
+    x = tf.keras.layers.Reshape(target_shape=(y_length,384, 350, 1))(x)
+    output = x 
+    return output
+
+def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian'):
+    inp = tf.keras.Input(shape=(x_length, 768, 700, 1))
+
+    if architecture == 'Tian':
+        x = encoder(inp, rnn_type, relu_alpha)
+        x = decoder(x, rnn_type, relu_alpha)
+
+        # Apply mask to output
+        output = tf.keras.layers.Multiply(name='Mask')([x, get_mask_y()])
+        
+    elif architecture == 'AENN':
+        output = generator_AENN(inp, rnn_type, relu_alpha, x_length, y_length)
+    else:
+        raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
+        
+    model = tf.keras.Model(inputs=inp, outputs=output, name='Generator')
     return model
 
 def build_discriminator(relu_alpha, y_length=1):
@@ -181,13 +242,13 @@ def build_discriminator(relu_alpha, y_length=1):
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2):
+    def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian'):
         super(GAN, self).__init__()      
         self.discriminator = build_discriminator(y_length=y_length, relu_alpha=relu_alpha)
-        self.generator = build_generator(rnn_type, x_length=x_length, relu_alpha=relu_alpha)
+        self.generator = build_generator(rnn_type, x_length=x_length, y_length = y_length, relu_alpha=relu_alpha, architecture=architecture)
  
     
-    def compile(self, optimizer=Adam(learning_rate=0.0001), optimizer_g = Adam(learning_rate=0.0001)):
+    def compile(self, optimizer_d=Adam(learning_rate=0.0001), optimizer_g = Adam(learning_rate=0.0001)):
         super(GAN, self).compile()
         
         self.d_optimizer = optimizer_d
