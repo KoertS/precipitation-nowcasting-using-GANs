@@ -191,6 +191,9 @@ class DataGenerator(keras.utils.Sequence):
         return (x-MEAN)/STD
     
     def minmax(self,x):
+        '''
+        Performs minmax scaling to scale the images to range of -1 to 1
+        '''
         # pixel values are in 0.01mm
         # define max intensity as 100mm
         MIN=0
@@ -199,7 +202,7 @@ class DataGenerator(keras.utils.Sequence):
         # Set values over 100mm/h to 100mm/h
         x = np.clip(x, MIN, MAX)
         
-        x = (x - MIN)/(MAX - MIN)
+        x = (x - MIN - MAX/2)/(MAX/2 - MIN)
       
         return x
     

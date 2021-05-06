@@ -61,15 +61,18 @@ def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='sam
     x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
 
-def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, transposed = False ):
+def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, transposed = False, output_layer=False):
     layer =  tf.keras.layers.Conv2D
     if transposed:
         layer = tf.keras.layers.Conv2DTranspose
  
     x = layer(name=name, filters=filters, kernel_size=kernel_size, 
                                               strides=strides, padding=padding)(x)
-                     
-    x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
+    
+    if output_layer:
+        x = tf.keras.activations.tanh(x)
+    else:
+        x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
 
 def encoder(x, rnn_type, relu_alpha):
@@ -145,8 +148,8 @@ def decoder(x, rnn_type, relu_alpha):
 
   # Upsample to target resolution
   x = tf.keras.layers.Conv2DTranspose( name='Upsample3', filters=8, kernel_size=(5, 5), strides=(2,2), padding='same')(x)
-  
-  x = tf.keras.layers.Conv2DTranspose( name='Conv', filters=1, kernel_size=1, strides=1, padding='same')(x) 
+  x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
+  x = tf.keras.layers.Conv2DTranspose( name='Conv', filters=1, kernel_size=1, strides=1, padding='same', activation='tanh')(x) 
     
   x = tf.keras.layers.Reshape(target_shape=(1,384, 350, 1))(x)
   return x  
@@ -184,7 +187,7 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1):
     x = conv_block(x, filters = 32, kernel_size=3, strides = 2, 
                       relu_alpha = relu_alpha, transposed = True)
     x = conv_block(x, filters = y_length, kernel_size=5, strides = 2, 
-                      relu_alpha = relu_alpha, transposed = True)
+                      output_layer=True, transposed = True)
     
     # Convert to predictions
     # Crop to fit output shape
@@ -247,7 +250,6 @@ class GAN(tf.keras.Model):
         self.discriminator = build_discriminator(y_length=y_length, relu_alpha=relu_alpha)
         self.generator = build_generator(rnn_type, x_length=x_length, y_length = y_length, relu_alpha=relu_alpha, architecture=architecture)
  
-    
     def compile(self, optimizer_d=Adam(learning_rate=0.0001), optimizer_g = Adam(learning_rate=0.0001)):
         super(GAN, self).compile()
         
