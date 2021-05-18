@@ -70,7 +70,7 @@ def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu
                                               strides=strides, padding=padding)(x)
     
     if output_layer:
-        x = tf.keras.activations.tanh(x)
+        x = tf.keras.activations.linear(x)
     else:
         x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
@@ -194,8 +194,8 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1):
     x = tf.keras.layers.Cropping2D((0,17))(x)
     
     # Apply mask to output
-    x = tf.keras.layers.Multiply(name='Mask')([x, get_mask_y()])
     x = tf.keras.layers.Reshape(target_shape=(y_length,384, 350, 1))(x)
+    
     output = x 
     return output
 
@@ -213,7 +213,11 @@ def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='
         output = generator_AENN(inp, rnn_type, relu_alpha, x_length, y_length)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
-        
+    # Mask pixels outside Netherlands as -1    
+    mask = get_mask_y()
+    output = tf.keras.layers.Multiply(name='Mask')([output, mask])
+    #output = tf.keras.layers.subtract([output, 1-mask])  
+    
     model = tf.keras.Model(inputs=inp, outputs=output, name='Generator')
     return model
 
@@ -250,17 +254,18 @@ class GAN(tf.keras.Model):
         self.discriminator = build_discriminator(y_length=y_length, relu_alpha=relu_alpha)
         self.generator = build_generator(rnn_type, x_length=x_length, y_length = y_length, relu_alpha=relu_alpha, architecture=architecture)
  
-    def compile(self, optimizer_d=Adam(learning_rate=0.0001), optimizer_g = Adam(learning_rate=0.0001)):
+    def compile(self, lr_g=0.0001, lr_d = 0.0001):
         super(GAN, self).compile()
         
-        self.d_optimizer = optimizer_d
-        self.g_optimizer = optimizer_g 
-        
+        self.g_optimizer = Adam(learning_rate=lr_g) 
+        self.d_optimizer = Adam(learning_rate=lr_d)
+
         self.loss_fn = tf.keras.losses.BinaryCrossentropy()
         self.loss_mse = tf.keras.losses.MeanSquaredError()
         
-        self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
+        self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
+
         self.mse_metric = tf.keras.metrics.Mean(name="mse")
     
     def call(self, x):
@@ -308,6 +313,7 @@ class GAN(tf.keras.Model):
         with tf.GradientTape() as tape:
             predictions = self.discriminator(self.generator(xs))
             g_loss_gan = self.loss_fn(misleading_labels, predictions)
+     
             g_loss_mse = self.loss_mse(ys, predictions)
             g_loss = g_loss_gan + g_loss_mse
         grads = tape.gradient(g_loss, self.generator.trainable_weights)

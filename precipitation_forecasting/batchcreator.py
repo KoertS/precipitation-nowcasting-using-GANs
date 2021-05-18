@@ -48,8 +48,8 @@ class DataGenerator(keras.utils.Sequence):
    
         # Normalize
         self.norm_method = norm_method
-        if norm_method and norm_method != 'minmax' and norm_method != 'zscore':
-            print('Unknown normalization method. Options are \'minmax\' and \'zscore\'')
+        if norm_method and norm_method != 'minmax' and norm_method != 'zscore' and norm_method != 'minmax_tanh':
+            print('Unknown normalization method. Options are \'minmax\' , \'zscore\' and \'minmax_tanh\'')
             print('Normalization method has been set to None')
             self.norm_method = None
         self.crop_y = crop_y
@@ -106,7 +106,9 @@ class DataGenerator(keras.utils.Sequence):
         if self.norm_method == 'minmax':
             X = self.minmax(X)
             y = self.minmax(y)
-        
+        if self.norm_method == 'minmax_tanh':
+            X = self.minmax(X, tanh=True)
+            y = self.minmax(y, tanh=True)        
         if self.crop_y:
             y = self.crop_center(y)
         return X, y
@@ -190,20 +192,23 @@ class DataGenerator(keras.utils.Sequence):
 
         return (x-MEAN)/STD
     
-    def minmax(self,x):
+    def minmax(self,x, tanh=False):
         '''
-        Performs minmax scaling to scale the images to range of -1 to 1
+        Performs minmax scaling to scale the images to range of 0 to 1.
+        If tanh is True than scale to -1 to 1 as tanh is used for activation function generator
         '''
         # pixel values are in 0.01mm
         # define max intensity as 100mm
-        MIN=0
-        MAX=10000
+        MIN = 0
+        MAX = 10000
         
         # Set values over 100mm/h to 100mm/h
         x = np.clip(x, MIN, MAX)
         
-        x = (x - MIN - MAX/2)/(MAX/2 - MIN)
-      
+        if tanh:
+            x = (x - MIN - MAX/2)/(MAX/2 - MIN) 
+        else:
+            x = (x - MIN)/(MAX- MIN)
         return x
     
     def crop_center(self, img,cropx=350,cropy=384):
