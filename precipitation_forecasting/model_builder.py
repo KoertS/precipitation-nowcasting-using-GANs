@@ -70,7 +70,7 @@ def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu
                                               strides=strides, padding=padding)(x)
     
     if output_layer:
-        x = tf.keras.activations.relu(x)
+        x = tf.keras.activations.linear(x)
     else:
         x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
@@ -253,12 +253,13 @@ def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='
         output = generator_AENN(inp, rnn_type, relu_alpha, x_length, y_length)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
-    # Mask pixels outside Netherlands as -1    
-    mask = get_mask_y()
-    output = tf.keras.layers.Multiply(name='Mask')([output, mask])
+    # Mask pixels outside Netherlands  
+    mask = tf.constant(get_mask_y(), 'float32')
+    masked_output = tf.keras.layers.Lambda(lambda x: x * mask, name='Mask')(output)
+   # If tanh activation:
    # output = tf.keras.layers.subtract([output, 1-mask])  
     
-    model = tf.keras.Model(inputs=inp, outputs=output, name='Generator')
+    model = tf.keras.Model(inputs=inp, outputs=masked_output, name='Generator')
     return model
 
 def build_discriminator(relu_alpha, y_length, architecture = 'Tian'):
