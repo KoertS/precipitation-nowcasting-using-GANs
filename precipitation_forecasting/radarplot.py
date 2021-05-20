@@ -7,7 +7,7 @@ from pyproj import Proj, transform
 from mpl_toolkits.basemap import Basemap
 import config
 
-def plot_on_map(rdr, ftype='.nc', res='l'):
+def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True):
     '''
     Plot radar file on top of map.
     rdr: image file
@@ -71,4 +71,5 @@ def plot_on_map(rdr, ftype='.nc', res='l'):
     cmap = cm.viridis
     plt.imshow(mx, vmin = vmin, cmap=cmap, origin='upper', 
            extent=[xx.min(), xx.max(), yy.min(), yy.max()])
-    plt.colorbar()
+    if colorbar:
+        plt.colorbar()
