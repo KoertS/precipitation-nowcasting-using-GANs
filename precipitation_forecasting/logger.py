@@ -30,13 +30,11 @@ class ImageLogger(tf.keras.callbacks.Callback):
             images.append(sample_targets[i].reshape(384,350))
         reconstructions = [reconstruction.reshape(384,350) for reconstruction in reconstructions]
 
-        wandb.log({"images": [wandb.Image(image)
+        wandb.log({"Targets": [wandb.Image(image)
                               for image in images],
-                   "epoch": epoch,
-                  })
-        wandb.log({"reconstructions": [wandb.Image(reconstruction)
+                   "Predictions": [wandb.Image(reconstruction)
                               for reconstruction in reconstructions],
-                  "epoch": epoch
+                   "epoch": epoch
                   })
 
 class GradientLogger(tf.keras.callbacks.Callback):
@@ -84,11 +82,12 @@ class GradientLogger(tf.keras.callbacks.Callback):
         # Train the generator (note that we should *not* update the weights
         # of the discriminator)!
         with tf.GradientTape() as tape:
-            predictions = self.model.discriminator(self.model.generator(xs))
+            generated_images = self.model.generator(xs)
+            predictions = self.model.discriminator(generated_images)
             g_loss_gan = self.model.loss_fn(misleading_labels, predictions)
-     
-           # g_loss_mse = self.loss_mse(ys, predictions)
-            g_loss = g_loss_gan #+ g_loss_mse
+            g_loss_mse = self.model.loss_mse(ys, generated_images)
+           
+            g_loss = self.model.l_g * g_loss_gan  + self.model.l_mse * g_loss_mse
         
         grads_g = tape.gradient(g_loss, self.model.generator.trainable_weights)
         
