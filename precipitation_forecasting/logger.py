@@ -97,6 +97,4 @@ class GradientLogger(tf.keras.callbacks.Callback):
         grads_d = [item.numpy().flatten() for sublist in grads_d for item in sublist]
         grads_d = [item for sublist in grads_d for item in sublist]
             
-        wandb.log({'grads_g': wandb.Histogram(grads_g), 'grads_d': wandb.Histogram(grads_d)})
-        
-        
+        wandb.log({'grads_g': wandb.Histogram(grads_g), 'grads_d': wandb.Histogram(grads_d)})        
