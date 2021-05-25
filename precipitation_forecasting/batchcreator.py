@@ -234,7 +234,7 @@ class DataGenerator(keras.utils.Sequence):
 
 
 
-def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=False):
+def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=None):
     '''
     This function returns filenames between the a starting date and end date. 
     The filenames are packed into input and output arrays.
@@ -242,10 +242,20 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
     end_dt: end date time
     x_seq_size: size of the input sequence
     y_seq_size: size of the output sequence
-    filter_no_rain: boolean that indicates wether to discard input data were a scan has no rain
+    filter_no_rain: If None than use all samples, 
+        if sum30mm than filter less than 30mm per image, 
+        if avg0.01mm than filter out samples with average rain below 0.01mm/pixel
     '''
-    label_dir = config.dir_labels
     
+    
+    if filter_no_rain == 'sum30mm':
+        label_dir = config.dir_labels
+    elif filter_no_rain == 'avg0.01mm':
+        label_dir = config.dir_labels_heavy 
+    else:
+        print('Error: unkown filter_no_rain argument {}. Setting filtering to \'sum30mm\''.format(filter_no_rain))
+        label_dir = label_dir = config.dir_labels
+        
     # Create list of IDs to retrieve
     dts = np.arange( start_dt, end_dt, timedelta(minutes=5*x_seq_size)).astype(datetime)
     # Convert to filenames
@@ -254,6 +264,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=Fals
         list_ID = xs, ys =  get_filenames_xy(dt,x_seq_size,y_seq_size)
 
         if filter_no_rain:
+
             try:
                 has_rain = all([np.load(label_dir+ '{}/{}/{}.npy'.format(file[:4], file[4:6], file)) for file in xs])
             except Exception as e:
