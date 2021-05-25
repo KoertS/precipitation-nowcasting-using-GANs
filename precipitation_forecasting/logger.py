@@ -32,7 +32,6 @@ class ImageLogger(tf.keras.callbacks.Callback):
             plot = plot_target_pred(images[i], predictions[i])
             plots.append(plot)
             
-        print('epoch: ', epoch)
         wandb.log({"Targets & Predictions": [wandb.Image(plot)
                               for plot in plots]})
 
