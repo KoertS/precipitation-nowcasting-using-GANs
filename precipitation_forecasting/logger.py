@@ -1,6 +1,7 @@
 import tensorflow as tf
 import wandb
 import numpy as np
+from radarplot import plot_target_pred
 
 class ImageLogger(tf.keras.callbacks.Callback):
     '''
@@ -24,18 +25,21 @@ class ImageLogger(tf.keras.callbacks.Callback):
 
         images = []
         
-        reconstructions = self.model.predict(sample_images)[:self.n]
+        predictions = self.model.predict(sample_images)[:self.n]
             
         for i in range(self.n):
             images.append(sample_targets[i].reshape(384,350))
-        reconstructions = [reconstruction.reshape(384,350) for reconstruction in reconstructions]
-
-        wandb.log({"Targets": [wandb.Image(image)
-                              for image in images],
-                   "Predictions": [wandb.Image(reconstruction)
-                              for reconstruction in reconstructions],
-                   "epoch": epoch
-                  })
+            
+        predictions = [pred.reshape(384,350) for pred in predictions]
+        plots = []
+        
+        for i in range(len(images)):
+            plot = plot_target_pred(images[i], predictions[i])
+            plots.append(plot)
+            
+        print('epoch: ', epoch)
+        wandb.log({"Targets & Predictions": [wandb.Image(plot)
+                              for plot in plots]})
 
 class GradientLogger(tf.keras.callbacks.Callback):
     def __init__(self, x_test, y_test, n=4):
@@ -97,4 +101,5 @@ class GradientLogger(tf.keras.callbacks.Callback):
         grads_d = [item.numpy().flatten() for sublist in grads_d for item in sublist]
         grads_d = [item for sublist in grads_d for item in sublist]
             
-        wandb.log({'grads_g': wandb.Histogram(grads_g), 'grads_d': wandb.Histogram(grads_d)})        
+        wandb.log({'grads_g': wandb.Histogram(grads_g), 'grads_d': wandb.Histogram(grads_d)},
+                 step=epoch)        
