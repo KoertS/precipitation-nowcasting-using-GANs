@@ -10,25 +10,20 @@ class ImageLogger(tf.keras.callbacks.Callback):
     y_test: target data
     n: indicates how many images to plot
     '''
-    def __init__(self, x_test, y_test, n=4):
+    def __init__(self, generator, n=4):
         self.n = n
-        self.x_test = x_test
-        self.y_test = y_test
-
+        self.generator = generator
         super(ImageLogger, self).__init__()
 
     def on_epoch_end(self, logs, epoch):
-        indexes = np.random.randint(0, len(self.x_test), self.n)
-
-        sample_images = self.x_test[indexes]
-        sample_targets = self.y_test[indexes]
+        xs, ys = self.generator.__getitem__(np.random.randint(0,len(self.generator)))
 
         images = []
         
-        predictions = self.model.predict(sample_images)[:self.n]
+        predictions = self.model.predict(xs)[:self.n]
             
         for i in range(self.n):
-            images.append(sample_targets[i].reshape(384,350))
+            images.append(ys[i].reshape(384,350))
             
         predictions = [pred.reshape(384,350) for pred in predictions]
         plots = []
