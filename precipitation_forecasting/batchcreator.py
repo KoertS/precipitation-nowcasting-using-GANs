@@ -253,7 +253,8 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=None
     elif filter_no_rain == 'avg0.01mm':
         label_dir = config.dir_labels_heavy 
     else:
-        print('Error: unkown filter_no_rain argument {}. Setting filtering to \'sum30mm\''.format(filter_no_rain))
+        print('Error: unkown filter_no_rain argument {}. Options are \'sum30mm\' and \'avg0.01mm\'. ')
+        print('Setting filtering to \'sum30mm\''.format(filter_no_rain))
         label_dir = label_dir = config.dir_labels
         
     # Create list of IDs to retrieve
