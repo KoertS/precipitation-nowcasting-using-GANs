@@ -276,7 +276,19 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian'):
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01):
+    def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01,
+                g_cycles=1, noise_labels = 0):
+        '''
+        rnn_type: type of recurrent neural network can be LSTM or GRU
+        x_length: length of input sequence
+        y_length: length of output sequence
+        relu_alpha: slope of leaky relu layers
+        architecture: either 'Tian' or 'AENN'
+        l_g: weight of loss GAN for generator
+        l_mse: weight of mse for the generator
+        g_cycles: how many cycles to train the generator per train cycle
+        noise_labels: if higher than 0, noise is added to the labels
+        '''
         super(GAN, self).__init__()      
 
         self.generator = build_generator(rnn_type, x_length=x_length, 
@@ -288,6 +300,8 @@ class GAN(tf.keras.Model):
         
         self.l_g = l_g
         self.l_mse = l_mse
+        self.g_cycles=g_cycles
+        self.noise_labels=noise_labels
  
     def compile(self, lr_g=0.0001, lr_d = 0.0001):
         super(GAN, self).compile()
@@ -328,7 +342,7 @@ class GAN(tf.keras.Model):
         )
         
         # Add random noise to the labels - important trick!
-        #labels += 0.05 * tf.random.uniform(tf.shape(labels))
+        labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
 
         # Train the discriminator
         with tf.GradientTape() as tape:
@@ -345,14 +359,15 @@ class GAN(tf.keras.Model):
 
         # Train the generator (note that we should *not* update the weights
         # of the discriminator)!
-        with tf.GradientTape() as tape:
-            generated_images = self.generator(xs)
-            predictions = self.discriminator(generated_images)
-            g_loss_gan = self.loss_fn(misleading_labels, predictions)
-            g_loss_mse = self.loss_mse(ys, generated_images)
-            g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
-        grads = tape.gradient(g_loss, self.generator.trainable_weights)
-        self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
+        for _ in range(self.g_cycles):
+            with tf.GradientTape() as tape:
+                generated_images = self.generator(xs)
+                predictions = self.discriminator(generated_images)
+                g_loss_gan = self.loss_fn(misleading_labels, predictions)
+                g_loss_mse = self.loss_mse(ys, generated_images)
+                g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
+            grads = tape.gradient(g_loss, self.generator.trainable_weights)
+            self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
