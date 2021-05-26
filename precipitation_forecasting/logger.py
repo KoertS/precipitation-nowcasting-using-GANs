@@ -36,19 +36,14 @@ class ImageLogger(tf.keras.callbacks.Callback):
                               for plot in plots]})
 
 class GradientLogger(tf.keras.callbacks.Callback):
-    def __init__(self, x_test, y_test, n=4):
-        self.n = n
-        self.x_test = x_test
-        self.y_test = y_test
+    def __init__(self, generator):
+        self.generator = generator
 
         super(GradientLogger, self).__init__()
 
     
     def on_epoch_end(self, logs, epoch):
-        indexes = np.random.randint(0, len(self.x_test), self.n)
-
-        xs = self.x_test[indexes]
-        ys = self.y_test[indexes]
+        xs, ys = self.generator.__getitem__(np.random.randint(0,len(self.generator)))
         
         batch_size = tf.shape(xs)[0]
 
