@@ -325,7 +325,7 @@ class GAN(tf.keras.Model):
 
     @property
     def metrics(self):
-        return [self.d_loss_metric, self.g_loss_metric, self.mse_metric]
+        return [self.d_loss_metric, self.g_loss_metric, self.mse_metric, self.d_acc]
 
     def train_step(self, batch):
         xs, ys = batch
