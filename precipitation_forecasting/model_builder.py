@@ -314,8 +314,9 @@ class GAN(tf.keras.Model):
         
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
         self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
-
         self.mse_metric = tf.keras.metrics.Mean(name="mse")
+        self.d_acc = tf.keras.metrics.Accuracy(name='d_acc')
+
     
     def call(self, x):
         """Run the model."""
@@ -352,7 +353,7 @@ class GAN(tf.keras.Model):
         self.d_optimizer.apply_gradients(
             zip(grads, self.discriminator.trainable_weights)
         )
-
+        
       
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
@@ -368,14 +369,16 @@ class GAN(tf.keras.Model):
                 g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
             grads = tape.gradient(g_loss, self.generator.trainable_weights)
             self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
-
+        
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
         self.g_loss_metric.update_state(g_loss_gan)
         self.mse_metric.update_state(g_loss_mse)
+        self.d_acc.update_state(tf.ones((batch_size, 1)), predictions)
         
         return {
             "d_loss": self.d_loss_metric.result(),
             "g_loss": self.g_loss_metric.result(),
-            "mse_loss": self.mse_metric.result()
+            "mse": self.mse_metric.result(),
+            "d_acc": self.d_acc.result()
         } 
