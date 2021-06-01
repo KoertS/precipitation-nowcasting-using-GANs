@@ -2,6 +2,7 @@ import tensorflow as tf
 import wandb
 import numpy as np
 from radarplot import plot_target_pred
+import matplotlib.pyplot as plt 
 
 class ImageLogger(tf.keras.callbacks.Callback):
     '''
@@ -34,6 +35,7 @@ class ImageLogger(tf.keras.callbacks.Callback):
             
         wandb.log({"Targets & Predictions": [wandb.Image(plot)
                               for plot in plots]})
+        plt.close('all')
 
 class GradientLogger(tf.keras.callbacks.Callback):
     def __init__(self, generator):
