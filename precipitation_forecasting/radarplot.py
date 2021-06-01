@@ -33,7 +33,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
     '''
     
     dir_aart = config.dir_aart
-    aart_fbase = 'RAD_NL25_RAC_MFBS_EM_5min_'
+    aart_fbase = config.prefix_aart
     proj = Proj("+proj=stere +lat_0=90 +lon_0=0.0 +lat_ts=60.0 +a=6378.137 +b=6356.752 +x_0=0 +y_0=0")
     
     if ftype != '.nc' and ftype !='.h5':
@@ -49,7 +49,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
         
     # All images are plotted on the same map
     # Get the map from random nc file
-    path = dir_aart + aart_fbase + '201901010000.nc'
+    path = dir_aart + '01/01/{}201901010000.nc'.format(aart_fbase)
     with netCDF4.Dataset(path, 'r') as ds:
         # Get coordinates of the pixels
         xx, yy = np.meshgrid(ds['x'][:], ds['y'][:])
@@ -65,10 +65,8 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
             rain = ds['image1_image_data'][:]
             mask = rain.mask
             
-    if  ftype == '.h5':
-        dir_rtcor = config.dir_rtcor
-        rtcor_fbase = 'RAD_NL25_RAC_RT_'
-        path = dir_rtcor + rtcor_fbase + '201901010000.h5'
+    if  ftype == '.h5':  
+        path = config.dir_rtcor +  '/01/01/{}201901010000.h5'.format(config.prefix_rtcor)
         with h5py.File(path, 'r') as f:
                 rain = f['image1']['image_data'][:]
                 mask = (rain == 65535)
