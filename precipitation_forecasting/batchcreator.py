@@ -234,7 +234,7 @@ class DataGenerator(keras.utils.Sequence):
 
 
 
-def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=None):
+def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None):
     '''
     This function returns filenames between the a starting date and end date. 
     The filenames are packed into input and output arrays.
@@ -252,7 +252,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=None
         label_dir = config.dir_labels
     elif filter_no_rain == 'avg0.01mm':
         label_dir = config.dir_labels_heavy 
-    else:
+    elif filter_no_rain:
         print('Error: unkown filter_no_rain argument {}. Options are \'sum30mm\' and \'avg0.01mm\'. ')
         print('Setting filtering to \'sum30mm\''.format(filter_no_rain))
         label_dir = label_dir = config.dir_labels
@@ -265,7 +265,6 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=5,y_seq_size=1, filter_no_rain=None
         list_ID = xs, ys =  get_filenames_xy(dt,x_seq_size,y_seq_size)
 
         if filter_no_rain:
-
             try:
                 has_rain = all([np.load(label_dir+ '{}/{}/{}.npy'.format(file[:4], file[4:6], file)) for file in xs])
             except Exception as e:
