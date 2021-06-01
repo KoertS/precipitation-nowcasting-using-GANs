@@ -315,7 +315,7 @@ class GAN(tf.keras.Model):
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
         self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
         self.mse_metric = tf.keras.metrics.Mean(name="mse")
-        self.d_acc = tf.keras.metrics.Accuracy(name='d_acc')
+        self.d_acc = tf.keras.metrics.BinaryAccuracy(name='d_acc')
 
     
     def call(self, x):
