@@ -353,7 +353,8 @@ class GAN(tf.keras.Model):
         self.d_optimizer.apply_gradients(
             zip(grads, self.discriminator.trainable_weights)
         )
-        
+        # Update D accuracy metric
+        self.d_acc.update_state(labels, predictions)
       
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
@@ -374,7 +375,53 @@ class GAN(tf.keras.Model):
         self.d_loss_metric.update_state(d_loss)
         self.g_loss_metric.update_state(g_loss_gan)
         self.mse_metric.update_state(g_loss_mse)
-        self.d_acc.update_state(tf.ones((batch_size, 1)), predictions)
+        
+        return {
+            "d_loss": self.d_loss_metric.result(),
+            "g_loss": self.g_loss_metric.result(),
+            "mse": self.mse_metric.result(),
+            "d_acc": self.d_acc.result()
+        } 
+    
+    def test_step(self, batch):
+        xs, ys = batch
+        batch_size = tf.shape(xs)[0]
+
+        # Decode them to fake images
+        generated_images = self.generator(xs)
+
+        # Combine them with real images
+        combined_images = tf.concat([generated_images, ys], axis=0)
+
+        # Assemble labels discriminating real from fake images
+        labels = tf.concat(
+            [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
+        )
+        
+        # Add random noise to the labels - important trick!
+        labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
+
+        predictions = self.discriminator(combined_images)
+        d_loss = self.loss_fn(labels, predictions)
+        
+        # Update D accuracy metric
+        self.d_acc.update_state(labels, predictions)
+        
+        # Assemble labels that say "all real images"
+        misleading_labels = tf.zeros((batch_size, 1))
+
+        # Train the generator (note that we should *not* update the weights
+        # of the discriminator)!
+        generated_images = self.generator(xs)
+        predictions = self.discriminator(generated_images)
+        g_loss_gan = self.loss_fn(misleading_labels, predictions)
+        g_loss_mse = self.loss_mse(ys, generated_images)
+        g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
+        
+        # Update metrics
+        self.d_loss_metric.update_state(d_loss)
+        self.g_loss_metric.update_state(g_loss_gan)
+        self.mse_metric.update_state(g_loss_mse)
         
         return {
             "d_loss": self.d_loss_metric.result(),
