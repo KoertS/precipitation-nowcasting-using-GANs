@@ -156,7 +156,7 @@ def decoder(x, rnn_type, relu_alpha):
 
 def discriminator_Tian(x, relu_alpha):
     # Conv1
-    x = tf.keras.layers.Conv2D(filters=32, kernel_size=(5,5), strides=(3,3), padding='same', name='Conv1')(input_seq)
+    x = tf.keras.layers.Conv2D(filters=32, kernel_size=(5,5), strides=(3,3), padding='same', name='Conv1')(x)
     x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     
     #Conv2
