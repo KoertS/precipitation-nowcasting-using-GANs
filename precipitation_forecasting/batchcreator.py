@@ -176,7 +176,8 @@ class DataGenerator(keras.utils.Sequence):
             path = self.y_path + '{}.npy'.format(y_ID)
             rain = np.load(path)
         else:
-            path = self.y_path + config.prefix_aart + y_ID +'.nc'
+            year = y_ID[:4]
+            path = self.y_path + year + '/' + config.prefix_aart + y_ID +'.nc'
             rain = self.load_nc(path)
         # set masked values to 0
         # Note that the data was converted to integers by multiplying with 100

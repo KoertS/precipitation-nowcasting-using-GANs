@@ -22,9 +22,9 @@ def get_mask_y():
         mask = np.load(path_mask)
     else:
         # Get the mask for the input data
-        y_path = config.dir_aart
+        y_path = config.dir_aartS
         # The mask is the same for all radar scans, so simply chose a random one to get the mask
-        path = y_path + config.prefix_aart + '201901010000.nc'
+        path = y_path + '2019/' + config.prefix_aart + '201901010000.nc'
 
         with netCDF4.Dataset(path, 'r') as f:
             rain = f['image1_image_data'][:].data
@@ -309,7 +309,7 @@ class GAN(tf.keras.Model):
         self.g_optimizer = Adam(learning_rate=lr_g) 
         self.d_optimizer = Adam(learning_rate=lr_d)
 
-        self.loss_fn = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+        self.loss_fn = tf.keras.losses.BinaryCrossentropy()
         self.loss_mse = tf.keras.losses.MeanSquaredError()
         
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")

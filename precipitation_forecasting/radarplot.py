@@ -49,7 +49,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
         
     # All images are plotted on the same map
     # Get the map from random nc file
-    path = dir_aart + '01/01/{}201901010000.nc'.format(aart_fbase)
+    path = dir_aart + '2019/01/{}201901010000.nc'.format(aart_fbase)
     with netCDF4.Dataset(path, 'r') as ds:
         # Get coordinates of the pixels
         xx, yy = np.meshgrid(ds['x'][:], ds['y'][:])
@@ -66,7 +66,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
             mask = rain.mask
             
     if  ftype == '.h5':  
-        path = config.dir_rtcor +  '/01/01/{}201901010000.h5'.format(config.prefix_rtcor)
+        path = config.dir_rtcor +  '2019/01/{}201901010000.h5'.format(config.prefix_rtcor)
         with h5py.File(path, 'r') as f:
                 rain = f['image1']['image_data'][:]
                 mask = (rain == 65535)
