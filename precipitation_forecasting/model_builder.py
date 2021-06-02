@@ -2,12 +2,13 @@ import tensorflow as tf
 import numpy as np
 import netCDF4
 import os
-import config
+import config as conf
 import sys
-sys.path.insert(0,config.path_project)
+sys.path.insert(0,conf.path_project)
 sys.path.insert(0,'..')
 from ConvGRU2D import ConvGRU2D
 from tensorflow.keras.optimizers import Adam
+from batchcreator import minmax
 
 def get_mask_y():
     '''
@@ -22,9 +23,9 @@ def get_mask_y():
         mask = np.load(path_mask)
     else:
         # Get the mask for the input data
-        y_path = config.dir_aartS
+        y_path = conf.dir_aartS
         # The mask is the same for all radar scans, so simply chose a random one to get the mask
-        path = y_path + '2019/' + config.prefix_aart + '201901010000.nc'
+        path = y_path + '2019/' + conf.prefix_aart + '201901010000.nc'
 
         with netCDF4.Dataset(path, 'r') as f:
             rain = f['image1_image_data'][:].data
@@ -177,7 +178,7 @@ def discriminator_Tian(x, relu_alpha):
     output = tf.keras.layers.Dense(1, activation='sigmoid')(x) 
     return output
 
-def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1):
+def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, norm_method = None):
     ''' 
     This generator uses similar architecture as in AENN.
     An extra encoder layer was added to downsample the input image.
@@ -212,7 +213,8 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1):
                       relu_alpha = relu_alpha, transposed = True)
     x = conv_block(x, filters = y_length, kernel_size=3, strides = 3, 
                       output_layer=True, transposed = True)
-    
+    if norm_method and norm_method == 'minmax_tanh':
+        x = tf.keras.activations.tanh(x)
     # Convert to predictions
     # Crop to fit output shape
     x = tf.keras.layers.Cropping2D((0,17))(x)
@@ -243,21 +245,21 @@ def discriminator_AENN(x, relu_alpha):
     
     return output
 
-def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian'):
+def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian', norm_method = None):
     inp = tf.keras.Input(shape=(x_length, 768, 700, 1))
 
     if architecture == 'Tian':
         x = encoder(inp, rnn_type, relu_alpha)
         output = decoder(x, rnn_type, relu_alpha)        
     elif architecture == 'AENN':
-        output = generator_AENN(inp, rnn_type, relu_alpha, x_length, y_length)
+        output = generator_AENN(inp, rnn_type, relu_alpha, x_length, y_length, norm_method=norm_method)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
     # Mask pixels outside Netherlands  
     mask = tf.constant(get_mask_y(), 'float32')
     masked_output = tf.keras.layers.Lambda(lambda x: x * mask, name='Mask')(output)
-   # If tanh activation:
-   # output = tf.keras.layers.subtract([output, 1-mask])  
+    if norm_method and norm_method == 'minmax_tanh':
+        masked_output = tf.keras.layers.subtract([masked_output, 1-mask])  
     
     model = tf.keras.Model(inputs=inp, outputs=masked_output, name='Generator')
     return model
@@ -277,7 +279,7 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian'):
 
 class GAN(tf.keras.Model):
     def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01,
-                g_cycles=1, noise_labels = 0):
+                g_cycles=1, noise_labels = 0, norm_method = None):
         '''
         rnn_type: type of recurrent neural network can be LSTM or GRU
         x_length: length of input sequence
@@ -288,12 +290,14 @@ class GAN(tf.keras.Model):
         l_mse: weight of mse for the generator
         g_cycles: how many cycles to train the generator per train cycle
         noise_labels: if higher than 0, noise is added to the labels
+        norm_method: which normalization method was used. 
+                     Can be none or minmax_tanh where data scaled to be between -1 and 1
         '''
         super(GAN, self).__init__()      
 
         self.generator = build_generator(rnn_type, x_length=x_length, 
                                          y_length = y_length, relu_alpha=relu_alpha, 
-                                         architecture=architecture)
+                                         architecture=architecture, norm_method=norm_method)
         self.discriminator = build_discriminator(y_length=y_length, 
                                                  relu_alpha=relu_alpha,
                                                 architecture=architecture)
@@ -302,6 +306,7 @@ class GAN(tf.keras.Model):
         self.l_mse = l_mse
         self.g_cycles=g_cycles
         self.noise_labels=noise_labels
+        self.norm_method=norm_method
  
     def compile(self, lr_g=0.0001, lr_d = 0.0001):
         super(GAN, self).compile()
@@ -366,7 +371,11 @@ class GAN(tf.keras.Model):
                 generated_images = self.generator(xs)
                 predictions = self.discriminator(generated_images)
                 g_loss_gan = self.loss_fn(misleading_labels, predictions)
-                g_loss_mse = self.loss_mse(ys, generated_images)
+                if self.norm_method and self.norm_method == 'minmax_tanh':
+                    g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
+                                               , minmax(generated_images, tanh=True, undo=True))    
+                else:
+                    g_loss_mse = self.loss_mse(ys, generated_images)
                 g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
             grads = tape.gradient(g_loss, self.generator.trainable_weights)
             self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
@@ -415,7 +424,11 @@ class GAN(tf.keras.Model):
         generated_images = self.generator(xs)
         predictions = self.discriminator(generated_images)
         g_loss_gan = self.loss_fn(misleading_labels, predictions)
-        g_loss_mse = self.loss_mse(ys, generated_images)
+        if self.norm_method and self.norm_method == 'minmax_tanh':
+            g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
+                                               , minmax(generated_images, tanh=True, undo=True))  
+        else:
+            g_loss_mse = self.loss_mse(ys, generated_images)
         g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
         
         # Update metrics

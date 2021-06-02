@@ -102,13 +102,12 @@ class DataGenerator(keras.utils.Sequence):
 
         if self.norm_method == 'zscore':
             y = self.zscore(y)
-
         if self.norm_method == 'minmax':
-            X = self.minmax(X)
-            y = self.minmax(y)
+            X = minmax(X)
+            y = minmax(y)
         if self.norm_method == 'minmax_tanh':
-            X = self.minmax(X, tanh=True)
-            y = self.minmax(y, tanh=True)        
+            X = minmax(X, tanh=True)
+            y = minmax(y, tanh=True)        
         if self.crop_y:
             y = self.crop_center(y)
         return X, y
@@ -193,24 +192,6 @@ class DataGenerator(keras.utils.Sequence):
 
         return (x-MEAN)/STD
     
-    def minmax(self,x, tanh=False):
-        '''
-        Performs minmax scaling to scale the images to range of 0 to 1.
-        If tanh is True than scale to -1 to 1 as tanh is used for activation function generator
-        '''
-        # pixel values are in 0.01mm
-        # define max intensity as 100mm
-        MIN = 0
-        MAX = 10000
-        
-        # Set values over 100mm/h to 100mm/h
-        x = np.clip(x, MIN, MAX)
-        
-        if tanh:
-            x = (x - MIN - MAX/2)/(MAX/2 - MIN) 
-        else:
-            x = (x - MIN)/(MAX- MIN)
-        return x
     
     def crop_center(self, img,cropx=350,cropy=384):
         # batch size, sequence, height, width, channels
@@ -233,7 +214,31 @@ class DataGenerator(keras.utils.Sequence):
 
         return np.pad(array, pad_width=npad, mode='constant', constant_values=0)
 
-
+def minmax(x, tanh=False, undo=False):
+    '''
+    Performs minmax scaling to scale the images to range of 0 to 1.
+    If tanh is True than scale to -1 to 1 as tanh is used for activation function generator
+    '''
+    # pixel values are in 0.01mm
+    # define max intensity as 100mm
+    MIN = 0
+    MAX = 10000
+        
+ 
+        
+    if not undo:
+        # Set values over 100mm/h to 100mm/h
+        x = np.clip(x, MIN, MAX)
+        if tanh:
+            x = (x - MIN - MAX/2)/(MAX/2 - MIN) 
+        else:
+            x = (x - MIN)/(MAX- MIN)
+    else:
+        if tanh:
+            x = x*(MAX/2 - MIN) + MIN + MAX/2
+        else:
+            x = x*(MAX - MIN) + MIN
+    return x
 
 def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None):
     '''
