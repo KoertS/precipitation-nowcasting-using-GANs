@@ -3,6 +3,7 @@ import wandb
 import numpy as np
 from radarplot import plot_target_pred
 import matplotlib.pyplot as plt 
+from batchcreator import minmax
 
 class ImageLogger(tf.keras.callbacks.Callback):
     '''
@@ -29,6 +30,10 @@ class ImageLogger(tf.keras.callbacks.Callback):
         predictions = [pred.reshape(384,350) for pred in predictions]
         plots = []
         
+        if model.norm_method and model.norm_method == 'minmax_tanh':
+            predictions = minmax(predictions, tanh=True, undo=True)   
+            images = minmax(images, tanh=True, undo=True)
+            
         for i in range(len(images)):
             plot = plot_target_pred(images[i], predictions[i])
             plots.append(plot)
@@ -69,8 +74,6 @@ class GradientLogger(tf.keras.callbacks.Callback):
             d_loss = self.model.loss_fn(labels, predictions)
         grads_d = tape.gradient(d_loss, self.model.discriminator.trainable_weights)
 
-       
-      
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
 
