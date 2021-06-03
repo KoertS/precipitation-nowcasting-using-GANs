@@ -8,8 +8,29 @@ sys.path.insert(0,conf.path_project)
 sys.path.insert(0,'..')
 from ConvGRU2D import ConvGRU2D
 from tensorflow.keras.optimizers import Adam
-from batchcreator import minmax
 
+from batchcreator import minmax
+from tensorflow.keras import backend
+from tensorflow.keras.constraints import Constraint
+
+# implementation of wasserstein loss
+def wasserstein_loss(y_true, y_pred):
+    return backend.mean(y_true * y_pred)
+
+# clip model weights to a given hypercube
+class ClipConstraint(Constraint):
+    # set clip value when initialized
+    def __init__(self, clip_value):
+        self.clip_value = clip_value
+    
+    # clip model weights to hypercube
+    def __call__(self, weights):
+        return backend.clip(weights, -self.clip_value, self.clip_value)
+    
+    # get the config
+    def get_config(self):
+        return {'clip_value': self.clip_value}
+    
 def get_mask_y():
     '''
     The Overeem images are masked. Only values near the netherlands are kept.
@@ -48,28 +69,40 @@ def crop_center(img,cropx=350,cropy=384):
 # Based upon the paper by Tian. Used convLSTM instead of ConvGRU for now as the latter is not available in keras. 
 # This can later still be implemented.
 def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='same', return_sequences=True, 
-                  name=None, relu_alpha=0.2):
+                  name=None, relu_alpha=0.2, wgan = False, batch_norm = False):
+    const = None
+    if wgan:
+        const = ClipConstraint(0.01)
+        
     if rnn_type == 'GRU':
         x = ConvGRU2D.ConvGRU2D(name=name, filters=filters, kernel_size=kernel_size, 
                                               strides=strides,
                                               padding=padding, 
-                                              return_sequences=return_sequences)(x)   
+                                              return_sequences=return_sequences, kernel_constraint=const)(x)   
     if rnn_type == 'LSTM':
         x = tf.keras.layers.ConvLSTM2D(name=name, filters=filters, kernel_size=kernel_size, 
                                               strides=strides,
                                               padding=padding, 
-                                              return_sequences=return_sequences)(x)   
+                                              return_sequences=return_sequences, kernel_constraint=const)(x)   
+    if batch_norm:
+        x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
 
-def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, transposed = False, output_layer=False):
+def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, 
+               transposed = False, output_layer=False, wgan = False,  batch_norm = False):
     layer =  tf.keras.layers.Conv2D
     if transposed:
         layer = tf.keras.layers.Conv2DTranspose
- 
+        
+    const = None
+    if wgan:
+        const = ClipConstraint(0.01)
+        
     x = layer(name=name, filters=filters, kernel_size=kernel_size, 
-                                              strides=strides, padding=padding)(x)
-    
+                                              strides=strides, padding=padding, kernel_constraint=const)(x)
+    if batch_norm:
+        x = tf.keras.layers.BatchNormalization()(x)    
     if output_layer:
         x = tf.keras.activations.linear(x)
     else:
@@ -213,6 +246,7 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
                       relu_alpha = relu_alpha, transposed = True)
     x = conv_block(x, filters = y_length, kernel_size=3, strides = 3, 
                       output_layer=True, transposed = True)
+    
     if norm_method and norm_method == 'minmax_tanh':
         x = tf.keras.activations.tanh(x)
     # Convert to predictions
@@ -225,24 +259,27 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
     output = x 
     return output
 
-def discriminator_AENN(x, relu_alpha):
+def discriminator_AENN(x, relu_alpha,  wgan = False):
     # Add padding to make square image
     x = tf.keras.layers.ZeroPadding3D(padding=(0,0,17))(x)  
     
     x = conv_block(x, filters = 32, kernel_size=5, strides = 3, 
-                      relu_alpha = relu_alpha)   
+                      relu_alpha = relu_alpha, wgan = wgan)   
     x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha)        
+                      relu_alpha = relu_alpha, wgan = wgan)        
     x = conv_block(x, filters = 128, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha)
+                      relu_alpha = relu_alpha, wgan = wgan)
     x = conv_block(x, filters = 256, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha) 
+                      relu_alpha = relu_alpha, wgan = wgan) 
     x = conv_block(x, filters = 512, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha)
+                      relu_alpha = relu_alpha, wgan = wgan)
     x = tf.keras.layers.AveragePooling3D(pool_size=(1,8,8))(x)
     x = tf.keras.layers.Flatten()(x)
-    output = tf.keras.layers.Dense(1, activation='sigmoid')(x) 
     
+    if wgan:
+        output = tf.keras.layers.Dense(1, activation='linear')(x) 
+    else:
+        output = tf.keras.layers.Dense(1, activation='sigmoid')(x) 
     return output
 
 def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian', norm_method = None):
@@ -264,13 +301,13 @@ def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='
     model = tf.keras.Model(inputs=inp, outputs=masked_output, name='Generator')
     return model
 
-def build_discriminator(relu_alpha, y_length, architecture = 'Tian'):
+def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = False):
     inp = tf.keras.Input(shape=(y_length, 384, 350, 1))
     
     if architecture == 'Tian':
-        output = discriminator_Tian(inp, relu_alpha)
+        output = discriminator_Tian(inp, relu_alpha, wgan)
     elif architecture == 'AENN':
-        output = discriminator_AENN(inp, relu_alpha)
+        output = discriminator_AENN(inp, relu_alpha, wgan)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
         
@@ -279,7 +316,7 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian'):
 
 class GAN(tf.keras.Model):
     def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01,
-                g_cycles=1, noise_labels = 0, norm_method = None):
+                g_cycles=1, noise_labels = 0, norm_method = None, wgan = False):
         '''
         rnn_type: type of recurrent neural network can be LSTM or GRU
         x_length: length of input sequence
@@ -300,14 +337,15 @@ class GAN(tf.keras.Model):
                                          architecture=architecture, norm_method=norm_method)
         self.discriminator = build_discriminator(y_length=y_length, 
                                                  relu_alpha=relu_alpha,
-                                                architecture=architecture)
+                                                architecture=architecture, wgan = wgan)
         
         self.l_g = l_g
         self.l_mse = l_mse
         self.g_cycles=g_cycles
         self.noise_labels=noise_labels
         self.norm_method=norm_method
- 
+        self.wgan = wgan
+        
     def compile(self, lr_g=0.0001, lr_d = 0.0001):
         super(GAN, self).compile()
         
@@ -321,7 +359,10 @@ class GAN(tf.keras.Model):
         self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
         self.mse_metric = tf.keras.metrics.Mean(name="mse")
         self.d_acc = tf.keras.metrics.BinaryAccuracy(name='d_acc')
-
+        
+        if self.wgan:
+            self.opt = RMSprop(lr=0.00005)
+            self.loss_fn = wasserstein_loss
     
     def call(self, x):
         """Run the model."""
@@ -332,7 +373,13 @@ class GAN(tf.keras.Model):
     def metrics(self):
         return [self.d_loss_metric, self.g_loss_metric, self.mse_metric, self.d_acc]
 
-    def train_step(self, batch):
+    def model_step(self, batch, train = True):
+        '''
+        This function performs train_step
+        batch: batch of x and y data
+        train: wether to train the model
+               True for train_step, False when performing test_step
+        '''
         xs, ys = batch
         batch_size = tf.shape(xs)[0]
 
@@ -351,13 +398,17 @@ class GAN(tf.keras.Model):
         labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
 
         # Train the discriminator
-        with tf.GradientTape() as tape:
+        if train:
+            with tf.GradientTape() as tape:
+                predictions = self.discriminator(combined_images)
+                d_loss = self.loss_fn(labels, predictions)
+            grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
+            self.d_optimizer.apply_gradients(
+                zip(grads, self.discriminator.trainable_weights)
+            )
+        else:
             predictions = self.discriminator(combined_images)
             d_loss = self.loss_fn(labels, predictions)
-        grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
-        self.d_optimizer.apply_gradients(
-            zip(grads, self.discriminator.trainable_weights)
-        )
         # Update D accuracy metric
         self.d_acc.update_state(labels, predictions)
       
@@ -366,20 +417,31 @@ class GAN(tf.keras.Model):
 
         # Train the generator (note that we should *not* update the weights
         # of the discriminator)!
-        for _ in range(self.g_cycles):
-            with tf.GradientTape() as tape:
-                generated_images = self.generator(xs)
-                predictions = self.discriminator(generated_images)
-                g_loss_gan = self.loss_fn(misleading_labels, predictions)
-                if self.norm_method and self.norm_method == 'minmax_tanh':
-                    g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
-                                               , minmax(generated_images, tanh=True, undo=True))    
-                else:
-                    g_loss_mse = self.loss_mse(ys, generated_images)
-                g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
-            grads = tape.gradient(g_loss, self.generator.trainable_weights)
-            self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
-        
+        if train:
+            for _ in range(self.g_cycles):
+                with tf.GradientTape() as tape:
+                    generated_images = self.generator(xs)
+                    predictions = self.discriminator(generated_images)
+                    g_loss_gan = self.loss_fn(misleading_labels, predictions)
+                    if self.norm_method and self.norm_method == 'minmax_tanh':
+                        g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
+                                                   , minmax(generated_images, tanh=True, undo=True))    
+                    else:
+                        g_loss_mse = self.loss_mse(ys, generated_images)
+                    g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
+                grads = tape.gradient(g_loss, self.generator.trainable_weights)
+                self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
+        else:
+            generated_images = self.generator(xs)
+            predictions = self.discriminator(generated_images)
+            g_loss_gan = self.loss_fn(misleading_labels, predictions)
+            if self.norm_method and self.norm_method == 'minmax_tanh':
+                g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
+                                                   , minmax(generated_images, tanh=True, undo=True))  
+            else:
+                g_loss_mse = self.loss_mse(ys, generated_images)
+            g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
+            
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
         self.g_loss_metric.update_state(g_loss_gan)
@@ -391,54 +453,11 @@ class GAN(tf.keras.Model):
             "mse": self.mse_metric.result(),
             "d_acc": self.d_acc.result()
         } 
+            
+    def train_step(self, batch):
+        metric_dict = self.model_step(batch, train = True)       
+        return metric_dict
     
     def test_step(self, batch):
-        xs, ys = batch
-        batch_size = tf.shape(xs)[0]
-
-        # Decode them to fake images
-        generated_images = self.generator(xs)
-
-        # Combine them with real images
-        combined_images = tf.concat([generated_images, ys], axis=0)
-
-        # Assemble labels discriminating real from fake images
-        labels = tf.concat(
-            [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
-        )
-        
-        # Add random noise to the labels - important trick!
-        labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
-
-        predictions = self.discriminator(combined_images)
-        d_loss = self.loss_fn(labels, predictions)
-        
-        # Update D accuracy metric
-        self.d_acc.update_state(labels, predictions)
-        
-        # Assemble labels that say "all real images"
-        misleading_labels = tf.zeros((batch_size, 1))
-
-        # Train the generator (note that we should *not* update the weights
-        # of the discriminator)!
-        generated_images = self.generator(xs)
-        predictions = self.discriminator(generated_images)
-        g_loss_gan = self.loss_fn(misleading_labels, predictions)
-        if self.norm_method and self.norm_method == 'minmax_tanh':
-            g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
-                                               , minmax(generated_images, tanh=True, undo=True))  
-        else:
-            g_loss_mse = self.loss_mse(ys, generated_images)
-        g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
-        
-        # Update metrics
-        self.d_loss_metric.update_state(d_loss)
-        self.g_loss_metric.update_state(g_loss_gan)
-        self.mse_metric.update_state(g_loss_mse)
-        
-        return {
-            "d_loss": self.d_loss_metric.result(),
-            "g_loss": self.g_loss_metric.result(),
-            "mse": self.mse_metric.result(),
-            "d_acc": self.d_acc.result()
-        } 
+        metric_dict = self.model_step(batch, train = False)       
+        return metric_dict
