@@ -30,7 +30,7 @@ class ImageLogger(tf.keras.callbacks.Callback):
         predictions = [pred.reshape(384,350) for pred in predictions]
         plots = []
         
-        if model.norm_method and model.norm_method == 'minmax_tanh':
+        if self.model.norm_method and self.model.norm_method == 'minmax_tanh':
             predictions = minmax(predictions, tanh=True, undo=True)   
             images = minmax(images, tanh=True, undo=True)
             
