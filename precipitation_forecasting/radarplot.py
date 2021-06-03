@@ -49,7 +49,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
         
     # All images are plotted on the same map
     # Get the map from random nc file
-    path = dir_aart + '2019/01/{}201901010000.nc'.format(aart_fbase)
+    path = dir_aart + '2019/{}201901010000.nc'.format(aart_fbase)
     with netCDF4.Dataset(path, 'r') as ds:
         # Get coordinates of the pixels
         xx, yy = np.meshgrid(ds['x'][:], ds['y'][:])
@@ -105,7 +105,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
             plt.colorbar()
         return im
 
-def plot_target_pred(target,pred):
+def plot_target_pred(target,pred, vmin = 0):
     data = [np.squeeze(target), np.squeeze(pred)]
     vmax = np.max(data)
 
@@ -123,10 +123,10 @@ def plot_target_pred(target,pred):
                      cbar_pad=0.15
                      )
 
-    im = grid[0].imshow(data[0], vmin=0, vmax=vmax)
+    im = grid[0].imshow(data[0], vmin=vmin, vmax=vmax)
     grid[0].set_title('y')
     grid[0].axis('off')
-    im = grid[1].imshow(data[1], vmin=0, vmax=vmax)
+    im = grid[1].imshow(data[1], vmin=vmin, vmax=vmax)
     grid[1].set_title('y_pred')
     grid[1].axis('off')   
     # Colorbar
