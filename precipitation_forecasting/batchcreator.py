@@ -224,8 +224,6 @@ def minmax(x, tanh=False, undo=False):
     MIN = 0
     MAX = 10000
         
- 
-        
     if not undo:
         # Set values over 100mm/h to 100mm/h
         x = np.clip(x, MIN, MAX)
