@@ -14,9 +14,10 @@ import config
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, list_IDs, batch_size=32, 
-                 img_dim = (765, 700, 1), x_seq_size=6, y_seq_size=24, shuffle=True,
+                 inp_dim = (765, 700, 1), out_dim = (384, 350, 1), x_seq_size=6, y_seq_size=24, shuffle=True,
                 load_from_npy=True,
-                norm_method=None, crop_y=True, pad_x=True):
+                norm_method=None, crop_y=True, pad_x=True,
+                downscale_inp = False, downscale_out = False):
         '''
         list_IDs: pair of input and target filenames
         batch_size: size of batch to generate
@@ -29,9 +30,10 @@ class DataGenerator(keras.utils.Sequence):
         norm_method: string that states what normalization method to use: 'minmax' or 'znorm'
         crop_y: if true then crop around the netherlands, halving the image size
         pad_x: adds 3 empty rows to input data to make it divisible by 2
+        downscale_inp: If true uses bilinear interpolation to downscale input to 256x256
+        downscale_out: If true uses bilinear interpolation to downscale output to 256x256
         '''
-        self.inp_shape = (x_seq_size, *img_dim)
-        self.out_shape = (y_seq_size, *img_dim)
+        self.inp_dim = self.out_dim = (765, 700, 1)
         self.batch_size = batch_size
         self.list_IDs = list_IDs
         self.shuffle = shuffle
@@ -45,16 +47,30 @@ class DataGenerator(keras.utils.Sequence):
             self.x_path = config.dir_rtcor_npy
             self.y_path = config.dir_aart_npy
              
-   
         # Normalize
         self.norm_method = norm_method
         if norm_method and norm_method != 'minmax' and norm_method != 'zscore' and norm_method != 'minmax_tanh':
             print('Unknown normalization method. Options are \'minmax\' , \'zscore\' and \'minmax_tanh\'')
             print('Normalization method has been set to None')
             self.norm_method = None
+            
         self.crop_y = crop_y
         self.pad_x = pad_x
+        self.downscale_inp = downscale_inp
+        self.downscale_out = downscale_out
         
+        if self.downscale_inp:
+            self.inp_dim = (256,256,1)
+            self.pad_x = False
+        if self.downscale_out:
+            self.out_dim = (256,256,1)
+            self.crop_y = False
+        if self.crop_y:
+            self.out_dim = (384, 350, 1)
+        if self.pad_x:
+            self.inp_dim = (768, 700, 1)
+        self.inp_shape = (x_seq_size, *self.inp_dim)
+        self.out_shape = (y_seq_size, *self.out_dim)
 
     def __len__(self):
         'Denotes the number of batches per epoch'
@@ -99,7 +115,6 @@ class DataGenerator(keras.utils.Sequence):
 
         if self.pad_x:
             X = self.pad_along_axis(X)
-
         if self.norm_method == 'zscore':
             y = self.zscore(y)
         if self.norm_method == 'minmax':
@@ -108,8 +123,6 @@ class DataGenerator(keras.utils.Sequence):
         if self.norm_method == 'minmax_tanh':
             X = minmax(X, tanh=True)
             y = minmax(y, tanh=True)        
-        if self.crop_y:
-            y = self.crop_center(y)
         return X, y
     
     def load_h5(self, path):
@@ -157,34 +170,39 @@ class DataGenerator(keras.utils.Sequence):
     def load_x(self, x_ID):
         if self.load_from_npy:
             path = self.x_path + '{}.npy'.format(x_ID)
-            rain = np.load(path)
+            x = np.load(path)
         else:
             dt = datetime.strptime(x_ID, '%Y%m%d%H%M')
             path = self.x_path +  '{Y}/{m:02d}/{prefix}{ts}.h5'.format(Y=dt.year, m=dt.month, prefix = config.prefix_rtcor,  ts=x_ID)
-            rain = self.load_h5(path)   
+            x = self.load_h5(path)   
             
         # set masked values to 0
-        rain[rain == 65535] = 0
+        x[x == 65535] = 0
         # Expand dimensions from (w,h) to (w,h,c=1)
-        rain = np.expand_dims(rain, axis=-1)
+        x = np.expand_dims(x, axis=-1)
         
-        return rain
+        if self.downscale_inp:
+            x = tf.image.resize(x, (256, 256))
+        return x
         
     def load_y(self, y_ID):
         if self.load_from_npy:
             path = self.y_path + '{}.npy'.format(y_ID)
-            rain = np.load(path)
+            y = np.load(path)
         else:
             year = y_ID[:4]
             path = self.y_path + year + '/' + config.prefix_aart + y_ID +'.nc'
-            rain = self.load_nc(path)
+            y = self.load_nc(path)
         # set masked values to 0
         # Note that the data was converted to integers by multiplying with 100
-        rain[rain == 65535*100] = 0
+        y[y == 65535*100] = 0
         # Expand dimensions from (w,h) to (w,h,c=1)
-        rain = np.expand_dims(rain, axis=-1)
-            
-        return rain
+        y = np.expand_dims(y, axis=-1)
+        if self.crop_y:
+            y = self.crop_center(y)
+        if self.downscale_inp:
+            y = tf.image.resize(y , (256,256))
+        return y
         
     def zscore(self, x):
         MEAN = 0.7740296547051635
