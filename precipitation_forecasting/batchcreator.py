@@ -13,11 +13,10 @@ import config
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
-    def __init__(self, list_IDs, batch_size=32, 
-                 inp_dim = (765, 700, 1), out_dim = (384, 350, 1), x_seq_size=6, y_seq_size=24, shuffle=True,
-                load_from_npy=True,
+    def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
+                 y_seq_size=24, shuffle=True, load_from_npy=True,
                 norm_method=None, crop_y=True, pad_x=True,
-                downscale_inp = False, downscale_out = False):
+                downscale256 = False):
         '''
         list_IDs: pair of input and target filenames
         batch_size: size of batch to generate
@@ -30,10 +29,12 @@ class DataGenerator(keras.utils.Sequence):
         norm_method: string that states what normalization method to use: 'minmax' or 'znorm'
         crop_y: if true then crop around the netherlands, halving the image size
         pad_x: adds 3 empty rows to input data to make it divisible by 2
-        downscale_inp: If true uses bilinear interpolation to downscale input to 256x256
-        downscale_out: If true uses bilinear interpolation to downscale output to 256x256
+        downscale256: If true uses bilinear interpolation to downscale input and output to 256x256
         '''
-        self.inp_dim = self.out_dim = (765, 700, 1)
+        img_dim = (765, 700, 1)
+        self.inp_shape = (x_seq_size, *img_dim)
+        self.out_shape = (y_seq_size, *img_dim)
+        
         self.batch_size = batch_size
         self.list_IDs = list_IDs
         self.shuffle = shuffle
@@ -56,21 +57,10 @@ class DataGenerator(keras.utils.Sequence):
             
         self.crop_y = crop_y
         self.pad_x = pad_x
-        self.downscale_inp = downscale_inp
-        self.downscale_out = downscale_out
+        self.downscale256 = downscale256
+        if downscale256:
+            self.crop_y = self.pad_x = False
         
-        if self.downscale_inp:
-            self.inp_dim = (256,256,1)
-            self.pad_x = False
-        if self.downscale_out:
-            self.out_dim = (256,256,1)
-            self.crop_y = False
-        if self.crop_y:
-            self.out_dim = (384, 350, 1)
-        if self.pad_x:
-            self.inp_dim = (768, 700, 1)
-        self.inp_shape = (x_seq_size, *self.inp_dim)
-        self.out_shape = (y_seq_size, *self.out_dim)
 
     def __len__(self):
         'Denotes the number of batches per epoch'
@@ -112,9 +102,7 @@ class DataGenerator(keras.utils.Sequence):
             # Store target image(s)
             for c in range(self.out_shape[0]):
                 y[i,c] = self.load_y(y_IDs[c])
-
-        if self.pad_x:
-            X = self.pad_along_axis(X)
+                
         if self.norm_method == 'zscore':
             y = self.zscore(y)
         if self.norm_method == 'minmax':
@@ -122,7 +110,19 @@ class DataGenerator(keras.utils.Sequence):
             y = minmax(y)
         if self.norm_method == 'minmax_tanh':
             X = minmax(X, tanh=True)
-            y = minmax(y, tanh=True)        
+            y = minmax(y, tanh=True)
+        if self.pad_x:
+            X = self.pad_along_axis(X, axis=2, pad_size=3)
+        if self.crop_y:
+            y = self.crop_center(y)
+        if self.downscale256:
+            # First make the images square size
+            X = self.pad_along_axis(X, axis=2, pad_size=3)
+            X = self.pad_along_axis(X, axis=3, pad_size=68)
+            y = self.crop_center(y, cropx=384, cropy=384)
+            
+            X =  np.array([tf.image.resize(x, (256, 256)) for x in X])
+            y =  np.array([tf.image.resize(y_i, (256, 256)) for y_i in y])
         return X, y
     
     def load_h5(self, path):
@@ -181,8 +181,6 @@ class DataGenerator(keras.utils.Sequence):
         # Expand dimensions from (w,h) to (w,h,c=1)
         x = np.expand_dims(x, axis=-1)
         
-        if self.downscale_inp:
-            x = tf.image.resize(x, (256, 256))
         return x
         
     def load_y(self, y_ID):
@@ -198,10 +196,7 @@ class DataGenerator(keras.utils.Sequence):
         y[y == 65535*100] = 0
         # Expand dimensions from (w,h) to (w,h,c=1)
         y = np.expand_dims(y, axis=-1)
-        if self.crop_y:
-            y = self.crop_center(y)
-        if self.downscale_inp:
-            y = tf.image.resize(y , (256,256))
+        
         return y
         
     def zscore(self, x):
@@ -214,14 +209,14 @@ class DataGenerator(keras.utils.Sequence):
     def crop_center(self, img,cropx=350,cropy=384):
         # batch size, sequence, height, width, channels
         # Only change height and width
-        _,_, y,x, _ = img.shape
+        _,_,y,x, _ = img.shape
         startx = 20+x//2-(cropx//2)
         starty = 40+y//2-(cropy//2)    
         return img[:,:,starty:starty+cropy,startx:startx+cropx:,]
     
     def pad_along_axis(self, array, pad_size = 3, axis = 2):
         '''
-        Pad input to be divisible by 4. 
+        Pad input to be divisible by 2. 
         height of 765 to 768
         '''
         if pad_size <= 0:

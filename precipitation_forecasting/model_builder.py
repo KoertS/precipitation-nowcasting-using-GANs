@@ -211,7 +211,7 @@ def discriminator_Tian(x, relu_alpha):
     output = tf.keras.layers.Dense(1, activation='sigmoid')(x) 
     return output
 
-def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, norm_method = None):
+def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, norm_method = None, downscale256 = False):
     ''' 
     This generator uses similar architecture as in AENN.
     An extra encoder layer was added to downsample the input image.
@@ -219,14 +219,18 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
     instead of 2 to get to desired shape of 128x128
     AENN paper: jing2019
     '''
-    # Add padding to make square image
-    x = tf.keras.layers.ZeroPadding3D(padding=(0,0,34))(x)
+    if not downscale256:
+        # Add padding to make square image
+        x = tf.keras.layers.ZeroPadding3D(padding=(0,0,34))(x)
         
     # Encoder:    
     x = conv_block(x, filters = 32, kernel_size=5, strides = 2, 
                       relu_alpha = relu_alpha)
-    x = conv_block(x, filters = 32, kernel_size=5, strides = 3, 
-                      relu_alpha = relu_alpha)
+    # If input is not downscaled an extra convolution is needed 
+    # to get to same dimensions as AENN network
+    if not downscale256:
+        x = conv_block(x, filters = 32, kernel_size=5, strides = 3, 
+                          relu_alpha = relu_alpha)
     x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
                       relu_alpha = relu_alpha) 
     x = conv_block(x, filters = 128, kernel_size=3, strides = 2, 
@@ -237,33 +241,37 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
                       relu_alpha = relu_alpha,  rnn_type=rnn_type) 
     x = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
                       relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences=False) 
-    
     # Decoder:
     x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
                       relu_alpha = relu_alpha, transposed = True)
     
     x = conv_block(x, filters = 32, kernel_size=3, strides = 2, 
                       relu_alpha = relu_alpha, transposed = True)
-    x = conv_block(x, filters = y_length, kernel_size=3, strides = 3, 
+    strides_last = 3
+    if downscale256:
+        strides_last = 2
+    x = conv_block(x, filters = 1, kernel_size=3, strides = strides_last, 
                       output_layer=True, transposed = True)
     
     if norm_method and norm_method == 'minmax_tanh':
         x = tf.keras.activations.tanh(x)
     # Convert to predictions
     # Crop to fit output shape
-    x = tf.keras.layers.Cropping2D((0,17))(x)
-    
-    # Apply mask to output
-    x = tf.keras.layers.Reshape(target_shape=(y_length,384, 350, 1))(x)
+    if not downscale256:
+        x = tf.keras.layers.Cropping2D((0,17))(x)
     
     output = x 
     return output
 
-def discriminator_AENN(x, relu_alpha,  wgan = False):
-    # Add padding to make square image
-    x = tf.keras.layers.ZeroPadding3D(padding=(0,0,17))(x)  
-    
-    x = conv_block(x, filters = 32, kernel_size=5, strides = 3, 
+def discriminator_AENN(x, relu_alpha,  wgan = False, downscale256 = False):     
+    if downscale256:
+        strides_first = 2
+    else:
+        # Add padding to make square image
+        x = tf.keras.layers.ZeroPadding3D(padding=(0,0,17))(x)  
+        strides_first = 3
+        
+    x = conv_block(x, filters = 32, kernel_size=5, strides = strides_first, 
                       relu_alpha = relu_alpha, wgan = wgan)   
     x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
                       relu_alpha = relu_alpha, wgan = wgan)        
@@ -282,32 +290,52 @@ def discriminator_AENN(x, relu_alpha,  wgan = False):
         output = tf.keras.layers.Dense(1, activation='sigmoid')(x) 
     return output
 
-def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian', norm_method = None):
-    inp = tf.keras.Input(shape=(x_length, 768, 700, 1))
+def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian', 
+                    norm_method = None, downscale256 = False):
+    inp_dim = (768, 700,1)
+    out_dim = (384, 350, 1)
+    if downscale256:
+        inp_dim = (256, 256, 1)
+    if downscale256:
+        out_dim = (256, 256, 1)
+        
+    inp = tf.keras.Input(shape=(x_length, *inp_dim))
 
     if architecture == 'Tian':
         x = encoder(inp, rnn_type, relu_alpha)
         output = decoder(x, rnn_type, relu_alpha)        
     elif architecture == 'AENN':
-        output = generator_AENN(inp, rnn_type, relu_alpha, x_length, y_length, norm_method=norm_method)
+        output = generator_AENN(inp, rnn_type, relu_alpha, 
+                                x_length, y_length, norm_method=norm_method, 
+                                downscale256 = downscale256)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
-    # Mask pixels outside Netherlands  
-    mask = tf.constant(get_mask_y(), 'float32')
-    masked_output = tf.keras.layers.Lambda(lambda x: x * mask, name='Mask')(output)
-    if norm_method and norm_method == 'minmax_tanh':
-        masked_output = tf.keras.layers.subtract([masked_output, 1-mask])  
     
-    model = tf.keras.Model(inputs=inp, outputs=masked_output, name='Generator')
+
+    # Go from 384, 350, 1 to shape 1, 384, 350, 1
+    output = tf.keras.layers.Reshape(target_shape=(y_length,*out_dim))(output)
+    
+    if not downscale256:
+        # Apply mask to output
+        # Mask pixels outside Netherlands  
+        mask = tf.constant(get_mask_y(), 'float32')
+        output = tf.keras.layers.Lambda(lambda x: x * mask, name='Mask')(output)
+        if norm_method and norm_method == 'minmax_tanh':
+            output = tf.keras.layers.subtract([output, 1-mask])  
+    
+    model = tf.keras.Model(inputs=inp, outputs=output, name='Generator')
     return model
 
-def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = False):
-    inp = tf.keras.Input(shape=(y_length, 384, 350, 1))
+def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = False, downscale256 = False):
+    inp_dim = (384, 350, 1)
+    if downscale256:
+        inp_dim = (256, 256, 1)
+    inp = tf.keras.Input(shape=(y_length, *inp_dim))
     
     if architecture == 'Tian':
         output = discriminator_Tian(inp, relu_alpha, wgan)
     elif architecture == 'AENN':
-        output = discriminator_AENN(inp, relu_alpha, wgan)
+        output = discriminator_AENN(inp, relu_alpha, wgan, downscale256 = downscale256)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
         
@@ -315,9 +343,10 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = Fals
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self, rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01,
-                g_cycles=1, noise_labels = 0, norm_method = None, wgan = False):
+    def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01, g_cycles=1, noise_labels = 0, norm_method = None, wgan = False, downscale256 = False):
         '''
+        inp_dim: dimensions of input image(s), default 768x700
+        out_dim: dimensions of the output image(s), default 384x350
         rnn_type: type of recurrent neural network can be LSTM or GRU
         x_length: length of input sequence
         y_length: length of output sequence
@@ -329,15 +358,19 @@ class GAN(tf.keras.Model):
         noise_labels: if higher than 0, noise is added to the labels
         norm_method: which normalization method was used. 
                      Can be none or minmax_tanh where data scaled to be between -1 and 1
+        wgan: Option to use wasserstein loss (Not fully implemented yet)
+        downscale_inp: If true than the input is downscaled to 256x256 by using bilinear interpolation
+        downscale_out: If true than the output is downscaled to 256x256 by using bilinear interpolation
         '''
         super(GAN, self).__init__()      
 
         self.generator = build_generator(rnn_type, x_length=x_length, 
                                          y_length = y_length, relu_alpha=relu_alpha, 
-                                         architecture=architecture, norm_method=norm_method)
+                                         architecture=architecture, norm_method=norm_method,
+                                        downscale256 = downscale256)
         self.discriminator = build_discriminator(y_length=y_length, 
                                                  relu_alpha=relu_alpha,
-                                                architecture=architecture, wgan = wgan)
+                                                architecture=architecture, wgan = wgan, downscale256 = downscale256)
         
         self.l_g = l_g
         self.l_mse = l_mse
