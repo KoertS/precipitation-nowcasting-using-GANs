@@ -81,8 +81,8 @@ class GradientLogger(tf.keras.callbacks.Callback):
             generated_images = self.model.generator(xs)
             predictions = self.model.discriminator(generated_images)
             g_loss_gan = self.model.loss_fn(misleading_labels, predictions)
-            g_loss_mse = self.loss_mse(ys, generated_images)
-            g_loss_mae = self.loss_mae(ys, generated_images)
+            g_loss_mse = self.model.loss_mse(ys, generated_images)
+            g_loss_mae = self.model.loss_mae(ys, generated_images)
             g_loss = self.l_g * g_loss_gan  + self.l_rec * (g_loss_mse+g_loss_mae)       
         grads_g = tape.gradient(g_loss, self.model.generator.trainable_weights)
         
