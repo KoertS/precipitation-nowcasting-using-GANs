@@ -24,7 +24,7 @@ class ImageLogger(tf.keras.callbacks.Callback):
         
         if self.model.norm_method and self.model.norm_method == 'minmax_tanh':
             predictions = minmax(predictions, tanh=True, undo=True)   
-            images = minmax(images, tanh=True, undo=True)  
+            images = minmax(images, tanh = True, undo=True)  
            
         predictions = np.squeeze(predictions)
         images =np.squeeze(ys)
@@ -81,10 +81,9 @@ class GradientLogger(tf.keras.callbacks.Callback):
             generated_images = self.model.generator(xs)
             predictions = self.model.discriminator(generated_images)
             g_loss_gan = self.model.loss_fn(misleading_labels, predictions)
-            g_loss_mse = self.model.loss_mse(ys, generated_images)
-           
-            g_loss = self.model.l_g * g_loss_gan  + self.model.l_mse * g_loss_mse
-        
+            g_loss_mse = self.loss_mse(ys, generated_images)
+            g_loss_mae = self.loss_mae(ys, generated_images)
+            g_loss = self.l_g * g_loss_gan  + self.l_rec * (g_loss_mse+g_loss_mae)       
         grads_g = tape.gradient(g_loss, self.model.generator.trainable_weights)
         
         grads_g = [item.numpy().flatten() for sublist in grads_g for item in sublist]
