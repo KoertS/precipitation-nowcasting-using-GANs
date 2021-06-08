@@ -26,8 +26,8 @@ class ImageLogger(tf.keras.callbacks.Callback):
             predictions = minmax(predictions, tanh=True, undo=True)   
             images = minmax(images, tanh=True, undo=True)  
            
-        predictions = [pred.reshape(384,350) for pred in predictions]
-        images = [img.reshape(384,350) for img in ys]
+        predictions = np.squeeze(predictions)
+        images =np.squeeze(ys)
         plots = []
         
  
