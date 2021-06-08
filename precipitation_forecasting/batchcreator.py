@@ -16,7 +16,7 @@ class DataGenerator(keras.utils.Sequence):
     def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
                  y_seq_size=24, shuffle=True, load_from_npy=True,
                 norm_method=None, crop_y=True, pad_x=True,
-                downscale256 = False):
+                downscale256 = False, convert_to_dbz = False):
         '''
         list_IDs: pair of input and target filenames
         batch_size: size of batch to generate
@@ -30,6 +30,7 @@ class DataGenerator(keras.utils.Sequence):
         crop_y: if true then crop around the netherlands, halving the image size
         pad_x: adds 3 empty rows to input data to make it divisible by 2
         downscale256: If true uses bilinear interpolation to downscale input and output to 256x256
+        convert_to_dbz: If true the rain values (mm/h) will be transformed into dbz
         '''
         img_dim = (765, 700, 1)
         self.inp_shape = (x_seq_size, *img_dim)
@@ -60,7 +61,7 @@ class DataGenerator(keras.utils.Sequence):
         self.downscale256 = downscale256
         if downscale256:
             self.crop_y = self.pad_x = False
-        
+        self.convert_to_dbz = convert_to_dbz
 
     def __len__(self):
         'Denotes the number of batches per epoch'
@@ -106,11 +107,11 @@ class DataGenerator(keras.utils.Sequence):
         if self.norm_method == 'zscore':
             y = self.zscore(y)
         if self.norm_method == 'minmax':
-            X = minmax(X)
-            y = minmax(y)
+            X = minmax(X, convert_to_dbz=self.convert_to_dbz)
+            y = minmax(y, convert_to_dbz=self.convert_to_dbz)
         if self.norm_method == 'minmax_tanh':
-            X = minmax(X, tanh=True)
-            y = minmax(y, tanh=True)
+            X = minmax(X, tanh=True, convert_to_dbz=self.convert_to_dbz)
+            y = minmax(y, tanh=True, convert_to_dbz=self.convert_to_dbz)
         if self.pad_x:
             X = self.pad_along_axis(X, axis=2, pad_size=3)
         if self.crop_y:
@@ -227,7 +228,7 @@ class DataGenerator(keras.utils.Sequence):
 
         return np.pad(array, pad_width=npad, mode='constant', constant_values=0)
 
-def minmax(x, tanh=False, undo=False):
+def minmax(x, tanh=False, undo=False, convert_to_dbz = False):
     '''
     Performs minmax scaling to scale the images to range of 0 to 1.
     If tanh is True than scale to -1 to 1 as tanh is used for activation function generator
@@ -236,7 +237,10 @@ def minmax(x, tanh=False, undo=False):
     # define max intensity as 100mm
     MIN = 0
     MAX = 10000
-        
+    
+    if convert_to_dbz:
+        MAX = 55
+        x = r_to_dbz(x)
     if not undo:
         # Set values over 100mm/h to 100mm/h
         x = np.clip(x, MIN, MAX)
@@ -250,6 +254,15 @@ def minmax(x, tanh=False, undo=False):
         else:
             x = x*(MAX - MIN) + MIN
     return x
+
+def r_to_dbz(r):
+    '''
+    Convert mm/h to dbz
+    '''
+    # Pixel values are in 0.01mm
+    # Convert r to be in mm/h not 0.01mm/h
+    r = r / 100
+    return 10 * np.log10(200*r**(8/5)+1) 
 
 def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None):
     '''

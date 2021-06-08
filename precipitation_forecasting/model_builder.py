@@ -9,7 +9,6 @@ sys.path.insert(0,'..')
 from ConvGRU2D import ConvGRU2D
 from tensorflow.keras.optimizers import Adam
 
-from batchcreator import minmax
 from tensorflow.keras import backend
 from tensorflow.keras.constraints import Constraint
 
@@ -104,9 +103,9 @@ def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu
     if batch_norm:
         x = tf.keras.layers.BatchNormalization()(x)    
     if output_layer:
-        #x = tf.keras.activations.linear(x)
-      #  x = tf.keras.activations.relu(x, max_value=1)
-        x = tf.keras.activations.sigmoid(x)
+       # x = tf.keras.activations.linear(x)
+        x = tf.keras.activations.relu(x)
+      #  x = tf.keras.activations.sigmoid(x)
     else:
         x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
@@ -432,7 +431,7 @@ class GAN(tf.keras.Model):
         )
         
         # Add random noise to the labels - important trick!
-        labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
+        #labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
 
         # Train the discriminator
         if train:
