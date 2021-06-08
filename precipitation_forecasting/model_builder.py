@@ -104,7 +104,9 @@ def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu
     if batch_norm:
         x = tf.keras.layers.BatchNormalization()(x)    
     if output_layer:
-        x = tf.keras.activations.linear(x)
+        #x = tf.keras.activations.linear(x)
+      #  x = tf.keras.activations.relu(x, max_value=1)
+        x = tf.keras.activations.sigmoid(x)
     else:
         x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
@@ -255,7 +257,7 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
     
     if norm_method and norm_method == 'minmax_tanh':
         x = tf.keras.activations.tanh(x)
-    # Convert to predictions
+
     # Crop to fit output shape
     if not downscale256:
         x = tf.keras.layers.Cropping2D((0,17))(x)
@@ -343,7 +345,7 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = Fals
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_mse = 0.01, g_cycles=1, noise_labels = 0, norm_method = None, wgan = False, downscale256 = False):
+    def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_rec = 0.01, g_cycles=1, noise_labels = 0, norm_method = None, wgan = False, downscale256 = False):
         '''
         inp_dim: dimensions of input image(s), default 768x700
         out_dim: dimensions of the output image(s), default 384x350
@@ -353,7 +355,7 @@ class GAN(tf.keras.Model):
         relu_alpha: slope of leaky relu layers
         architecture: either 'Tian' or 'AENN'
         l_g: weight of loss GAN for generator
-        l_mse: weight of mse for the generator
+        l_rec: weight of reconstruction loss (mse + mae) for the generator
         g_cycles: how many cycles to train the generator per train cycle
         noise_labels: if higher than 0, noise is added to the labels
         norm_method: which normalization method was used. 
@@ -373,7 +375,7 @@ class GAN(tf.keras.Model):
                                                 architecture=architecture, wgan = wgan, downscale256 = downscale256)
         
         self.l_g = l_g
-        self.l_mse = l_mse
+        self.l_rec = l_rec
         self.g_cycles=g_cycles
         self.noise_labels=noise_labels
         self.norm_method=norm_method
@@ -387,10 +389,12 @@ class GAN(tf.keras.Model):
 
         self.loss_fn = tf.keras.losses.BinaryCrossentropy()
         self.loss_mse = tf.keras.losses.MeanSquaredError()
+        self.loss_mae = tf.keras.losses.MeanAbsoluteError()
         
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
         self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
         self.mse_metric = tf.keras.metrics.Mean(name="mse")
+        self.mae_metric = tf.keras.metrics.Mean(name="mae")
         self.d_acc = tf.keras.metrics.BinaryAccuracy(name='d_acc')
         
         if self.wgan:
@@ -456,34 +460,30 @@ class GAN(tf.keras.Model):
                     generated_images = self.generator(xs)
                     predictions = self.discriminator(generated_images)
                     g_loss_gan = self.loss_fn(misleading_labels, predictions)
-                    if self.norm_method and self.norm_method == 'minmax_tanh':
-                        g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
-                                                   , minmax(generated_images, tanh=True, undo=True))    
-                    else:
-                        g_loss_mse = self.loss_mse(ys, generated_images)
-                    g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
+                    g_loss_mse = self.loss_mse(ys, generated_images)
+                    g_loss_mae = self.loss_mae(ys, generated_images)
+                    g_loss = self.l_g * g_loss_gan  + self.l_rec * (g_loss_mse+g_loss_mae)       
                 grads = tape.gradient(g_loss, self.generator.trainable_weights)
                 self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
         else:
             generated_images = self.generator(xs)
             predictions = self.discriminator(generated_images)
             g_loss_gan = self.loss_fn(misleading_labels, predictions)
-            if self.norm_method and self.norm_method == 'minmax_tanh':
-                g_loss_mse = self.loss_mse(minmax(ys, tanh=True, undo=True)   
-                                                   , minmax(generated_images, tanh=True, undo=True))  
-            else:
-                g_loss_mse = self.loss_mse(ys, generated_images)
-            g_loss = self.l_g * g_loss_gan  + self.l_mse * g_loss_mse       
+            g_loss_mse = self.loss_mse(ys, generated_images)
+            g_loss_mae = self.loss_mae(ys, generated_images)
+            g_loss = self.l_g * g_loss_gan  + self.l_rec * (g_loss_mse+g_loss_mae)       
             
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
         self.g_loss_metric.update_state(g_loss_gan)
         self.mse_metric.update_state(g_loss_mse)
+        self.mae_metric.update_state(g_loss_mae)
         
         return {
             "d_loss": self.d_loss_metric.result(),
             "g_loss": self.g_loss_metric.result(),
             "mse": self.mse_metric.result(),
+            'mae': self.mae_metric.result(),
             "d_acc": self.d_acc.result()
         } 
             
