@@ -226,7 +226,7 @@ class DataGenerator(keras.utils.Sequence):
         npad = [(0, 0)] * array.ndim
         npad[axis] = (0, pad_size)
 
-        return np.pad(array, pad_width=npad, mode='constant', constant_values=0)
+        return tf.pad(array, pad_width=npad, mode='constant', constant_values=0)
 
 def minmax(x, tanh=False, undo=False, convert_to_dbz = False):
     '''
@@ -243,7 +243,7 @@ def minmax(x, tanh=False, undo=False, convert_to_dbz = False):
         x = r_to_dbz(x)
     if not undo:
         # Set values over 100mm/h to 100mm/h
-        x = np.clip(x, MIN, MAX)
+        x = tf.clip_by_value(x, MIN, MAX)
         if tanh:
             x = (x - MIN - MAX/2)/(MAX/2 - MIN) 
         else:
