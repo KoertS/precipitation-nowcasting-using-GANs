@@ -215,18 +215,18 @@ class DataGenerator(keras.utils.Sequence):
         starty = 40+y//2-(cropy//2)    
         return img[:,:,starty:starty+cropy,startx:startx+cropx:,]
     
-    def pad_along_axis(self, array, pad_size = 3, axis = 2):
+    def pad_along_axis(self, x, pad_size = 3, axis = 2):
         '''
         Pad input to be divisible by 2. 
         height of 765 to 768
         '''
         if pad_size <= 0:
-            return array
+            return x
 
-        npad = [(0, 0)] * array.ndim
+        npad = [(0, 0)] * x.ndim
         npad[axis] = (0, pad_size)
 
-        return tf.pad(array, pad_width=npad, mode='constant', constant_values=0)
+        return tf.pad(x, paddings=npad, constant_values=0)
 
 def minmax(x, tanh=False, undo=False, convert_to_dbz = False):
     '''
@@ -262,7 +262,12 @@ def r_to_dbz(r):
     # Pixel values are in 0.01mm
     # Convert r to be in mm/h not 0.01mm/h
     r = r / 100
-    return 10 * np.log10(200*r**(8/5)+1) 
+    return 10 * tf_log10(200*r**(8/5)+1) 
+
+def tf_log10(x):
+  numerator = tf.math.log(x)
+  denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
+  return numerator / denominator
 
 def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None):
     '''
