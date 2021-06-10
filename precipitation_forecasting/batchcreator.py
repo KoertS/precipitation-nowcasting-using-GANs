@@ -33,6 +33,18 @@ class DataGenerator(keras.utils.Sequence):
         convert_to_dbz: If true the rain values (mm/h) will be transformed into dbz
         '''
         img_dim = (765, 700, 1)
+        
+        self.x_path = config.dir_rtcor
+        self.y_path = config.dir_aart 
+        self.load_from_npy = load_from_npy
+        if self.load_from_npy:
+            self.x_path = config.dir_rtcor_npy
+            self.y_path = config.dir_aart_npy
+            # If from npy than the image has been preprocessed
+            img_dim = (256, 256, 1)
+            # No need for further preprocessing:
+            norm_method = None
+            crop_y = pad_x = downscale256 = convert_to_dbz = False
         self.inp_shape = (x_seq_size, *img_dim)
         self.out_shape = (y_seq_size, *img_dim)
         
@@ -40,15 +52,8 @@ class DataGenerator(keras.utils.Sequence):
         self.list_IDs = list_IDs
         self.shuffle = shuffle
         self.on_epoch_end()
-        self.load_from_npy = load_from_npy
-
         
-        self.x_path = config.dir_rtcor
-        self.y_path = config.dir_aart 
-        if self.load_from_npy:
-            self.x_path = config.dir_rtcor_npy
-            self.y_path = config.dir_aart_npy
-             
+          
         # Normalize
         self.norm_method = norm_method
         if norm_method and norm_method != 'minmax' and norm_method != 'zscore' and norm_method != 'minmax_tanh':
@@ -95,7 +100,6 @@ class DataGenerator(keras.utils.Sequence):
         # Generate data
         for i, IDs in enumerate(list_IDs_temp):
             x_IDs, y_IDs = IDs
-
             # Store input image(s)
             for c in range(self.inp_shape[0]):
                 X[i,c] = self.load_x(x_IDs[c])
@@ -131,20 +135,24 @@ class DataGenerator(keras.utils.Sequence):
         The orginial input images are stored in .h5 files. 
         This function loads them and converts them to numpy arrays
         '''
-        radar_img = None
+        x = None
         with h5py.File(path, 'r') as f:
             try:
-                radar_img = f['image1']['image_data'][:]
+                x = f['image1']['image_data'][:]
 
                 ## Set pixels out of image to 0
                 out_of_image = f['image1']['calibration'].attrs['calibration_out_of_image']
-                radar_img[radar_img == out_of_image] = 0
+                x[x == out_of_image] = 0
                 # Sometimes 255 or other number (244) is used for the calibration
                 # for out of image values, so also check the first pixel
-                radar_img[radar_img == radar_img[0][0]] = 0
+                x[x == x[0][0]] = 0
+                # set masked values to 0
+                x[x == 65535] = 0
+                # Expand dimensions from (w,h) to (w,h,c=1)
+                x = np.expand_dims(x, axis=-1)
             except:
                 print("Error: could not read image1 data, file {}".format(path))
-        return radar_img
+        return x
     
     def load_nc(self, path, as_int=True):
         '''
@@ -176,12 +184,6 @@ class DataGenerator(keras.utils.Sequence):
             dt = datetime.strptime(x_ID, '%Y%m%d%H%M')
             path = self.x_path +  '{Y}/{m:02d}/{prefix}{ts}.h5'.format(Y=dt.year, m=dt.month, prefix = config.prefix_rtcor,  ts=x_ID)
             x = self.load_h5(path)   
-            
-        # set masked values to 0
-        x[x == 65535] = 0
-        # Expand dimensions from (w,h) to (w,h,c=1)
-        x = np.expand_dims(x, axis=-1)
-        
         return x
         
     def load_y(self, y_ID):
