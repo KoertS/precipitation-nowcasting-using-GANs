@@ -413,8 +413,7 @@ class GAN(tf.keras.Model):
         '''
         This function performs train_step
         batch: batch of x and y data
-        train: wether to train the model
-               True for train_step, False when performing test_step
+        train: True for train_step, False when performing test_step
         '''
         xs, ys = batch
         batch_size = tf.shape(xs)[0]
