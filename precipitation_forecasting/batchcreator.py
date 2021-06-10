@@ -8,7 +8,7 @@ import tensorflow as tf
 from tensorflow import keras
 import h5py
 from netCDF4 import Dataset
-import config
+import config as conf
 
 
 class DataGenerator(keras.utils.Sequence):
@@ -34,12 +34,12 @@ class DataGenerator(keras.utils.Sequence):
         '''
         img_dim = (765, 700, 1)
         
-        self.x_path = config.dir_rtcor
-        self.y_path = config.dir_aart 
+        self.x_path = conf.dir_rtcor
+        self.y_path = conf.dir_aart 
         self.load_from_npy = load_from_npy
         if self.load_from_npy:
-            self.x_path = config.dir_rtcor_npy
-            self.y_path = config.dir_aart_npy
+            self.x_path = conf.dir_rtcor_npy
+            self.y_path = conf.dir_aart_npy
             # If from npy than the image has been preprocessed
             img_dim = (256, 256, 1)
             # No need for further preprocessing:
@@ -94,8 +94,8 @@ class DataGenerator(keras.utils.Sequence):
     def __data_generation(self, list_IDs_temp):
         'Generates data containing batch_size samples' 
         # Initialization
-        X = np.empty((self.batch_size, *self.inp_shape))
-        y = np.empty((self.batch_size, *self.out_shape))
+        X = np.empty((self.batch_size, *self.inp_shape), dtype = np.float32)
+        y = np.empty((self.batch_size, *self.out_shape), dtype = np.float32)
 
         # Generate data
         for i, IDs in enumerate(list_IDs_temp):
@@ -107,7 +107,7 @@ class DataGenerator(keras.utils.Sequence):
             # Store target image(s)
             for c in range(self.out_shape[0]):
                 y[i,c] = self.load_y(y_IDs[c])
-                
+     
         if self.norm_method == 'zscore':
             y = self.zscore(y)
         if self.norm_method == 'minmax':
@@ -120,14 +120,14 @@ class DataGenerator(keras.utils.Sequence):
             X = self.pad_along_axis(X, axis=2, pad_size=3)
         if self.crop_y:
             y = self.crop_center(y)
+
         if self.downscale256:
             # First make the images square size
             X = self.pad_along_axis(X, axis=2, pad_size=3)
             X = self.pad_along_axis(X, axis=3, pad_size=68)
             y = self.crop_center(y, cropx=384, cropy=384)
-            
-            X =  np.array([tf.image.resize(x, (256, 256)) for x in X])
-            y =  np.array([tf.image.resize(y_i, (256, 256)) for y_i in y])
+            X =  tf.convert_to_tensor([tf.image.resize(x, (256, 256)) for x in X])
+            y =  tf.convert_to_tensor([tf.image.resize(y_i, (256, 256)) for y_i in y])
         return X, y
     
     def load_h5(self, path):
@@ -182,7 +182,8 @@ class DataGenerator(keras.utils.Sequence):
             x = np.load(path)
         else:
             dt = datetime.strptime(x_ID, '%Y%m%d%H%M')
-            path = self.x_path +  '{Y}/{m:02d}/{prefix}{ts}.h5'.format(Y=dt.year, m=dt.month, prefix = config.prefix_rtcor,  ts=x_ID)
+            path = self.x_path +  '{Y}/{m:02d}/{prefix}{ts}.h5'.format(Y=dt.year, m=dt.month, 
+                                                                       prefix = conf.prefix_rtcor,  ts=x_ID)
             x = self.load_h5(path)   
         return x
         
@@ -192,14 +193,14 @@ class DataGenerator(keras.utils.Sequence):
             y = np.load(path)
         else:
             year = y_ID[:4]
-            path = self.y_path + year + '/' + config.prefix_aart + y_ID +'.nc'
+            path = self.y_path + year + '/' + conf.prefix_aart + y_ID +'.nc'
             y = self.load_nc(path)
         # set masked values to 0
         # Note that the data was converted to integers by multiplying with 100
         y[y == 65535*100] = 0
         # Expand dimensions from (w,h) to (w,h,c=1)
         y = np.expand_dims(y, axis=-1)
-        
+
         return y
         
     def zscore(self, x):
@@ -286,13 +287,13 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None
     
     
     if filter_no_rain == 'sum30mm':
-        label_dir = config.dir_labels
+        label_dir = conf.dir_labels
     elif filter_no_rain == 'avg0.01mm':
-        label_dir = config.dir_labels_heavy 
+        label_dir = conf.dir_labels_heavy 
     elif filter_no_rain:
         print('Error: unkown filter_no_rain argument {}. Options are \'sum30mm\' and \'avg0.01mm\'. ')
         print('Setting filtering to \'sum30mm\''.format(filter_no_rain))
-        label_dir = label_dir = config.dir_labels
+        label_dir = label_dir = conf.dir_labels
         
     # Create list of IDs to retrieve
     dts = np.arange( start_dt, end_dt, timedelta(minutes=5*x_seq_size)).astype(datetime)
