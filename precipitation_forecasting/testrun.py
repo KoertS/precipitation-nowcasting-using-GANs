@@ -64,7 +64,7 @@ else:
 # Initialize model
 if config.model == 'GAN':
     model = GAN(rnn_type = config.rnn_type, x_length = config.x_length, y_length = config.y_length,
-             architecture = config.architecture, g_cycles=config.g_cycles, noise_labels = config.noise_labels,
+             architecture = config.architecture, g_cycles=config.g_cycles, label_smoothing = config.label_smoothing,
                 l_g = config.l_g, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
