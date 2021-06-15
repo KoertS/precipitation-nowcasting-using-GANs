@@ -15,8 +15,8 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 # Setup wandb run
 run = wandb.init(project='precipitation-forecasting',
             config={
-            'batch_size' : 8,
-            'epochs': 20,
+            'batch_size' : 32,
+            'epochs': 200,
             'lr_g': 0.001,
             'lr_d': 0.001,
             'l_g': 0.006,
@@ -27,13 +27,14 @@ run = wandb.init(project='precipitation-forecasting',
             'y_length': 1,
             'rnn_type': 'GRU',
             'filter_no_rain': 'avg0.01mm',
-            'train_data': 'list_IDs201906_avg001mm.npy',
-            'val_data': None,
+            'train_data': 'train2015_2018.npy',
+            'val_data': 'val2019.npy',
             'architecture': 'AENN',
-            'model': 'GAN',
+            'model': 'Generator',
             'norm_method': 'minmax',
-            'downscale256': False,
-            'convert_to_dbz': False,
+            'downscale256': True,
+            'convert_to_dbz': True,
+            'load_prep': True,
             'server':  'RU'
         })
 config = wandb.config
@@ -45,7 +46,7 @@ print(len(list_IDs))
 
 generator = DataGenerator(list_IDs, batch_size=config.batch_size,
                           x_seq_size=config.x_length, y_seq_size=config.y_length,
-                          norm_method = config.norm_method, load_from_npy=False,
+                          norm_method = config.norm_method, load_prep=config.load_prep,
                           downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz)
 
 if config.val_data:
@@ -55,7 +56,7 @@ if config.val_data:
 
     validation_generator = DataGenerator(val_IDs, batch_size = config.batch_size,
                                      x_seq_size = config.x_length, y_seq_size = config.y_length,
-                                     norm_method = config.norm_method, load_from_npy = False,
+                                     norm_method = config.norm_method, load_prep = config.load_prep,
                                      downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz)
 else:
     validation_generator = None
