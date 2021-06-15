@@ -30,8 +30,6 @@ class ImageLogger(tf.keras.callbacks.Callback):
         images =np.squeeze(ys)
         plots = []
         
- 
-            
         for i in range(len(images)):
             plot = plot_target_pred(images[i], predictions[i])
             plots.append(plot)

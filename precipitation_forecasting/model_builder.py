@@ -11,6 +11,7 @@ from tensorflow.keras.optimizers import Adam
 
 from tensorflow.keras import backend
 from tensorflow.keras.constraints import Constraint
+from RepeatVector4D import RepeatVector4D
 
 # implementation of wasserstein loss
 def wasserstein_loss(y_true, y_pred):
@@ -68,25 +69,28 @@ def crop_center(img,cropx=350,cropy=384):
 # Based upon the paper by Tian. Used convLSTM instead of ConvGRU for now as the latter is not available in keras. 
 # This can later still be implemented.
 def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='same', return_sequences=True, 
-                  name=None, relu_alpha=0.2, wgan = False, batch_norm = False):
+                  name=None, relu_alpha=0.2, wgan = False, batch_norm = False, return_state = False, initial_state=None):
     const = None
     if wgan:
         const = ClipConstraint(0.01)
-        
+    
     if rnn_type == 'GRU':
-        x = ConvGRU2D.ConvGRU2D(name=name, filters=filters, kernel_size=kernel_size, 
-                                              strides=strides,
-                                              padding=padding, 
-                                              return_sequences=return_sequences, kernel_constraint=const)(x)   
+        layer = ConvGRU2D.ConvGRU2D
     if rnn_type == 'LSTM':
-        x = tf.keras.layers.ConvLSTM2D(name=name, filters=filters, kernel_size=kernel_size, 
-                                              strides=strides,
-                                              padding=padding, 
-                                              return_sequences=return_sequences, kernel_constraint=const)(x)   
+        layer = tf.keras.layers.ConvLSTM2D
+        
+    x= layer(name=name, filters=filters, kernel_size=kernel_size, strides=strides, 
+              padding=padding, return_sequences=return_sequences, kernel_constraint=const, 
+              return_state = return_state)(x, initial_state = initial_state)
+    
+    if return_state:
+        x, *state  = x
+    else:
+        state = None
     if batch_norm:
         x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
-    return x
+    return x, state
 
 def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, 
                transposed = False, output_layer=False, wgan = False,  batch_norm = False):
@@ -98,14 +102,14 @@ def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu
     if wgan:
         const = ClipConstraint(0.01)
         
-    x = layer(name=name, filters=filters, kernel_size=kernel_size, 
-                                              strides=strides, padding=padding, kernel_constraint=const)(x)
+    conv_layer = layer(name=name, filters=filters, kernel_size=kernel_size, 
+                                              strides=strides, padding=padding, kernel_constraint=const)
+    x = tf.keras.layers.TimeDistributed(conv_layer)(x)
+    
     if batch_norm:
         x = tf.keras.layers.BatchNormalization()(x)    
     if output_layer:
-       # x = tf.keras.activations.linear(x)
-        x = tf.keras.activations.relu(x)
-      #  x = tf.keras.activations.sigmoid(x)
+        x = tf.keras.activations.relu(x, max_value=1)
     else:
         x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
     return x
@@ -238,10 +242,21 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
                       relu_alpha = relu_alpha) 
 
     # RNN part:
-    x = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+    if y_length > 1:
+        x, state = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+                          relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences = False,
+                          return_state = True) 
+        x = RepeatVector4D(y_length)(x)
+        x, _ = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+                          relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences= True,
+                         initial_state = state) 
+    else:
+        x, _ = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
                       relu_alpha = relu_alpha,  rnn_type=rnn_type) 
-    x = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+        x, _ = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
                       relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences=False) 
+       
+        x = tf.keras.layers.Reshape(target_shape=(y_length,32,32,128))(x)
     # Decoder:
     x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
                       relu_alpha = relu_alpha, transposed = True)
@@ -312,9 +327,6 @@ def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
     
-
-    # Go from 384, 350, 1 to shape 1, 384, 350, 1
-    output = tf.keras.layers.Reshape(target_shape=(y_length,*out_dim))(output)
     
     if not downscale256:
         # Apply mask to output
@@ -344,7 +356,9 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = Fals
     return model
 
 class GAN(tf.keras.Model):
-    def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_rec = 0.01, g_cycles=1, noise_labels = 0, norm_method = None, wgan = False, downscale256 = False):
+    def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, 
+                 y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_rec = 0.01, g_cycles=1, 
+                 label_smoothing = 0, norm_method = None, wgan = False, downscale256 = False, rec_with_mae=True):
         '''
         inp_dim: dimensions of input image(s), default 768x700
         out_dim: dimensions of the output image(s), default 384x350
@@ -356,12 +370,15 @@ class GAN(tf.keras.Model):
         l_g: weight of loss GAN for generator
         l_rec: weight of reconstruction loss (mse + mae) for the generator
         g_cycles: how many cycles to train the generator per train cycle
-        noise_labels: if higher than 0, noise is added to the labels
+        label_smoothing: When > 0, we compute the loss between the predicted labels 
+                          and a smoothed version of the true labels, where the smoothing 
+                          squeezes the labels towards 0.5. Larger values of 
+                          label_smoothing correspond to heavier smoothing
         norm_method: which normalization method was used. 
                      Can be none or minmax_tanh where data scaled to be between -1 and 1
         wgan: Option to use wasserstein loss (Not fully implemented yet)
-        downscale_inp: If true than the input is downscaled to 256x256 by using bilinear interpolation
-        downscale_out: If true than the output is downscaled to 256x256 by using bilinear interpolation
+        downscale256: If true than the images are downscaled to 256x256 by using bilinear interpolation
+        rec_with_mae: If true the reconstruction loss is MSE+MAE if false, rec it consists of only the MSE
         '''
         super(GAN, self).__init__()      
 
@@ -376,9 +393,10 @@ class GAN(tf.keras.Model):
         self.l_g = l_g
         self.l_rec = l_rec
         self.g_cycles=g_cycles
-        self.noise_labels=noise_labels
+        self.label_smoothing=label_smoothing
         self.norm_method=norm_method
         self.wgan = wgan
+        self.rec_with_mae = rec_with_mae
         
     def compile(self, lr_g=0.0001, lr_d = 0.0001):
         super(GAN, self).compile()
@@ -387,18 +405,30 @@ class GAN(tf.keras.Model):
         self.d_optimizer = Adam(learning_rate=lr_d)
 
         self.loss_fn = tf.keras.losses.BinaryCrossentropy()
+        self.loss_fn_d = tf.keras.losses.BinaryCrossentropy(label_smoothing=self.label_smoothing)
         self.loss_mse = tf.keras.losses.MeanSquaredError()
         self.loss_mae = tf.keras.losses.MeanAbsoluteError()
         
         self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
         self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
-        self.mse_metric = tf.keras.metrics.Mean(name="mse")
-        self.mae_metric = tf.keras.metrics.Mean(name="mae")
+        self.rec_metric = tf.keras.metrics.Mean(name="rec_loss")
         self.d_acc = tf.keras.metrics.BinaryAccuracy(name='d_acc')
         
         if self.wgan:
             self.opt = RMSprop(lr=0.00005)
             self.loss_fn = wasserstein_loss
+            
+    def loss_rec(self, target, pred, MAE = True):
+        '''
+        Reconstruction loss: sum of MSE and MAE.
+        mae: If false the reconstruction loss is equal to the MSE, this was found to perform better
+        '''
+        g_loss_mse = self.loss_mse(target, pred)
+        if MAE:
+            g_loss_mae = self.loss_mae(target, pred)       
+        else:
+            g_loss_mae = 0
+        return g_loss_mse + g_loss_mae
     
     def call(self, x):
         """Run the model."""
@@ -407,36 +437,27 @@ class GAN(tf.keras.Model):
 
     @property
     def metrics(self):
-        return [self.d_loss_metric, self.g_loss_metric, self.mse_metric, self.d_acc]
-
-    def model_step(self, batch, train = True):
-        '''
-        This function performs train_step
-        batch: batch of x and y data
-        train: True for train_step, False when performing test_step
-        '''
-        xs, ys = batch
-        batch_size = tf.shape(xs)[0]
-
+        return [self.d_loss_metric, self.g_loss_metric, self.rec_metric, self.d_acc]
+    
+    
+    def train_discriminator(self, xs , ys, batch_size, train = True):
         # Decode them to fake images
         generated_images = self.generator(xs)
 
         # Combine them with real images
         combined_images = tf.concat([generated_images, ys], axis=0)
 
-        # Assemble labels discriminating real from fake images
+        # Assemble labels discriminating fake from real images
         labels = tf.concat(
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
         
-        # Add random noise to the labels - important trick!
-        #labels += self.noise_labels * tf.random.uniform(tf.shape(labels))
 
         # Train the discriminator
         if train:
             with tf.GradientTape() as tape:
                 predictions = self.discriminator(combined_images)
-                d_loss = self.loss_fn(labels, predictions)
+                d_loss = self.loss_fn_d(labels, predictions)
             grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
             self.d_optimizer.apply_gradients(
                 zip(grads, self.discriminator.trainable_weights)
@@ -446,7 +467,9 @@ class GAN(tf.keras.Model):
             d_loss = self.loss_fn(labels, predictions)
         # Update D accuracy metric
         self.d_acc.update_state(labels, predictions)
-      
+        return d_loss
+
+    def train_generator(self, xs, ys, batch_size, train = True):
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
 
@@ -458,30 +481,41 @@ class GAN(tf.keras.Model):
                     generated_images = self.generator(xs)
                     predictions = self.discriminator(generated_images)
                     g_loss_gan = self.loss_fn(misleading_labels, predictions)
-                    g_loss_mse = self.loss_mse(ys, generated_images)
-                    g_loss_mae = self.loss_mae(ys, generated_images)
-                    g_loss = self.l_g * g_loss_gan  + self.l_rec * (g_loss_mse+g_loss_mae)       
+                    g_loss_rec = self.loss_rec(ys, generated_images, self.rec_with_mae)
+                    g_loss =  self.l_g * g_loss_gan  + self.l_rec * g_loss_rec           
                 grads = tape.gradient(g_loss, self.generator.trainable_weights)
                 self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
         else:
             generated_images = self.generator(xs)
             predictions = self.discriminator(generated_images)
             g_loss_gan = self.loss_fn(misleading_labels, predictions)
-            g_loss_mse = self.loss_mse(ys, generated_images)
-            g_loss_mae = self.loss_mae(ys, generated_images)
-            g_loss = self.l_g * g_loss_gan  + self.l_rec * (g_loss_mse+g_loss_mae)       
-            
+            g_loss_rec = self.loss_rec(ys, generated_images, self.rec_with_mae)
+            g_loss = self.l_g * g_loss_gan  + self.l_rec * g_loss_rec  
+        return g_loss_gan, g_loss_rec
+    
+    def model_step(self, batch, train = True):
+        '''
+        This function performs train_step
+        batch: batch of x and y data
+        train: wether to train the model
+               True for train_step, False when performing test_step
+        '''
+        xs, ys = batch
+        batch_size = tf.shape(xs)[0]
+
+        d_loss = self.train_discriminator(xs,ys,batch_size,train)
+        g_loss_gan, g_loss_rec  = self.train_generator(xs,ys,batch_size,train)
+
+
         # Update metrics
         self.d_loss_metric.update_state(d_loss)
         self.g_loss_metric.update_state(g_loss_gan)
-        self.mse_metric.update_state(g_loss_mse)
-        self.mae_metric.update_state(g_loss_mae)
-        
+        self.rec_metric.update_state(g_loss_rec)
+         
         return {
             "d_loss": self.d_loss_metric.result(),
             "g_loss": self.g_loss_metric.result(),
-            "mse": self.mse_metric.result(),
-            'mae': self.mae_metric.result(),
+            "rec_loss": self.rec_metric.result(),
             "d_acc": self.d_acc.result()
         } 
             
