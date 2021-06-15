@@ -16,26 +16,27 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 run = wandb.init(project='precipitation-forecasting',
             config={
             'batch_size' : 32,
-            'epochs': 200,
-            'lr_g': 0.001,
-            'lr_d': 0.001,
+            'epochs': 20,
+            'lr_g': 0.0001,
+            'lr_d': 0.0001,
             'l_g': 0.006,
             'l_rec': 1,
             'g_cycles': 3,
-            'noise_labels': 0,
+            'label_smoothing': 0,
             'x_length': 6,
             'y_length': 1,
-            'rnn_type': 'GRU',
+            'rnn_type': 'LSTM',
             'filter_no_rain': 'avg0.01mm',
             'train_data': 'train2015_2018.npy',
             'val_data': 'val2019.npy',
             'architecture': 'AENN',
-            'model': 'Generator',
+            'model': 'GAN',
             'norm_method': 'minmax',
             'downscale256': True,
             'convert_to_dbz': True,
             'load_prep': True,
-            'server':  'RU'
+            'server':  'RU',
+            'rec_with_mae': False
         })
 config = wandb.config
 
@@ -64,12 +65,13 @@ else:
 if config.model == 'GAN':
     model = GAN(rnn_type = config.rnn_type, x_length = config.x_length, y_length = config.y_length,
              architecture = config.architecture, g_cycles=config.g_cycles, noise_labels = config.noise_labels,
-                l_g = config.l_g, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256)
+                l_g = config.l_g, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
+               rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
     callbacks = [WandbCallback(), logger.ImageLogger(generator), logger.GradientLogger(generator)]
 else:
     model = build_generator(architecture=config.architecture, rnn_type=config.rnn_type, relu_alpha=0.2,
-			x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
+            x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
     opt = tf.keras.optimizers.Adam(learning_rate=config.lr_g)
     model.compile(loss='mse', metrics=['mse', 'mae'])
     callbacks = [WandbCallback(), logger.ImageLogger(generator)]
