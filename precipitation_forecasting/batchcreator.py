@@ -14,7 +14,7 @@ import config as conf
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
-                 y_seq_size=24, shuffle=True, load_from_npy=True,
+                 y_seq_size=24, shuffle=True, load_prep=False,
                 norm_method=None, crop_y=True, pad_x=True,
                 downscale256 = False, convert_to_dbz = False):
         '''
@@ -25,7 +25,8 @@ class DataGenerator(keras.utils.Sequence):
         shuffle: if true than shuffle the batch
         x_path: path to input data
         y_path: path to target data
-        load_from_npy: specifies if the generator should load the nc/h5 files and convert to numpy or load the numpy files directly
+        load_prep: if false the generator loads nc/h5 files and performs preprocessing after loading
+                    if true the generator loads preprocessed numpy files. These scans are in dbz, normalized and downscaled
         norm_method: string that states what normalization method to use: 'minmax' or 'znorm'
         crop_y: if true then crop around the netherlands, halving the image size
         pad_x: adds 3 empty rows to input data to make it divisible by 2
@@ -36,10 +37,10 @@ class DataGenerator(keras.utils.Sequence):
         
         self.x_path = conf.dir_rtcor
         self.y_path = conf.dir_aart 
-        self.load_from_npy = load_from_npy
-        if self.load_from_npy:
-            self.x_path = conf.dir_rtcor_npy
-            self.y_path = conf.dir_aart_npy
+        self.load_prep = load_prep
+        if self.load_prep:
+            self.x_path = conf.dir_rtcor_prep
+            self.y_path = conf.dir_aart_prep
             # If from npy than the image has been preprocessed
             img_dim = (256, 256, 1)
             # No need for further preprocessing:
@@ -171,13 +172,18 @@ class DataGenerator(keras.utils.Sequence):
                 if as_int:
                     radar_img *=100
                     radar_img = radar_img.astype(int)
+                # set masked values to 0
+                # Note that the data was converted to integers by multiplying with 100
+                radar_img[radar_img == 65535*100] = 0
+                # Expand dimensions from (w,h) to (w,h,c=1)
+                radar_img = np.expand_dims(radar_img, axis=-1)
             except:
                 print("Error: could not read image data, file {}".format(path))
         return radar_img
    
         
     def load_x(self, x_ID):
-        if self.load_from_npy:
+        if self.load_prep:
             path = self.x_path + '{}.npy'.format(x_ID)
             x = np.load(path)
         else:
@@ -188,18 +194,14 @@ class DataGenerator(keras.utils.Sequence):
         return x
         
     def load_y(self, y_ID):
-        if self.load_from_npy:
+        if self.load_prep:
             path = self.y_path + '{}.npy'.format(y_ID)
             y = np.load(path)
         else:
             year = y_ID[:4]
             path = self.y_path + year + '/' + conf.prefix_aart + y_ID +'.nc'
             y = self.load_nc(path)
-        # set masked values to 0
-        # Note that the data was converted to integers by multiplying with 100
-        y[y == 65535*100] = 0
-        # Expand dimensions from (w,h) to (w,h,c=1)
-        y = np.expand_dims(y, axis=-1)
+
 
         return y
         
