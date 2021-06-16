@@ -93,7 +93,7 @@ def convRNN_block(x, filters, kernel_size, strides, rnn_type='GRU', padding='sam
     return x, state
 
 def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu_alpha=0.2, 
-               transposed = False, output_layer=False, wgan = False,  batch_norm = False):
+               transposed = False, output_layer=False, wgan = False,  batch_norm = False, drop_out = False):
     layer =  tf.keras.layers.Conv2D
     if transposed:
         layer = tf.keras.layers.Conv2DTranspose
@@ -112,6 +112,8 @@ def conv_block(x, filters, kernel_size, strides, padding='same', name=None, relu
         x = tf.keras.activations.relu(x, max_value=1)
     else:
         x = tf.keras.layers.LeakyReLU(relu_alpha)(x)
+        if drop_out:
+            x = tf.keras.layers.Dropout(0.2)(x)
     return x
 
 def encoder(x, rnn_type, relu_alpha):
@@ -216,7 +218,8 @@ def discriminator_Tian(x, relu_alpha):
     output = tf.keras.layers.Dense(1, activation='sigmoid')(x) 
     return output
 
-def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, norm_method = None, downscale256 = False):
+def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, norm_method = None, downscale256 = False, 
+                  batch_norm = False, num_filters = 32):
     ''' 
     This generator uses similar architecture as in AENN.
     An extra encoder layer was added to downsample the input image.
@@ -229,45 +232,45 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
         x = tf.keras.layers.ZeroPadding3D(padding=(0,0,34))(x)
         
     # Encoder:    
-    x = conv_block(x, filters = 32, kernel_size=5, strides = 2, 
-                      relu_alpha = relu_alpha)
+    x = conv_block(x, filters = num_filters, kernel_size=5, strides = 2, 
+                      relu_alpha = relu_alpha, batch_norm = batch_norm)
     # If input is not downscaled an extra convolution is needed 
     # to get to same dimensions as AENN network
     if not downscale256:
-        x = conv_block(x, filters = 32, kernel_size=5, strides = 3, 
-                          relu_alpha = relu_alpha)
-    x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha) 
-    x = conv_block(x, filters = 128, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha) 
+        x = conv_block(x, filters = num_filters, kernel_size=5, strides = 3, 
+                          relu_alpha = relu_alpha, batch_norm = batch_norm)
+    x = conv_block(x, filters = num_filters * 2, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha, batch_norm = batch_norm) 
+    x = conv_block(x, filters = num_filters * 4, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha, batch_norm = batch_norm) 
 
     # RNN part:
     if y_length > 1:
-        x, state = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+        x, state = convRNN_block(x, filters = num_filters * 4, kernel_size=3, strides = 1, 
                           relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences = False,
-                          return_state = True) 
+                          return_state = True, batch_norm = batch_norm) 
         x = RepeatVector4D(y_length)(x)
-        x, _ = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
+        x, _ = convRNN_block(x, filters = num_filters * 4, kernel_size=3, strides = 1, 
                           relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences= True,
-                         initial_state = state) 
+                         initial_state = state, batch_norm = batch_norm) 
     else:
-        x, _ = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
-                      relu_alpha = relu_alpha,  rnn_type=rnn_type) 
-        x, _ = convRNN_block(x, filters = 128, kernel_size=3, strides = 1, 
-                      relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences=False) 
+        x, _ = convRNN_block(x, filters = num_filters * 4, kernel_size=3, strides = 1, 
+                      relu_alpha = relu_alpha,  rnn_type=rnn_type, batch_norm = batch_norm) 
+        x, _ = convRNN_block(x, filters = num_filters * 4, kernel_size=3, strides = 1, 
+                      relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences=False, batch_norm = batch_norm) 
        
-        x = tf.keras.layers.Reshape(target_shape=(y_length,32,32,128))(x)
+        x = tf.keras.layers.Reshape(target_shape=(y_length,32,32,num_filters * 4))(x)
     # Decoder:
-    x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha, transposed = True)
+    x = conv_block(x, filters = num_filters * 2, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha, transposed = True, batch_norm = batch_norm)
     
-    x = conv_block(x, filters = 32, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha, transposed = True)
+    x = conv_block(x, filters = num_filters, kernel_size=3, strides = 2, 
+                      relu_alpha = relu_alpha, transposed = True, batch_norm = batch_norm)
     strides_last = 3
     if downscale256:
         strides_last = 2
     x = conv_block(x, filters = 1, kernel_size=3, strides = strides_last, 
-                      output_layer=True, transposed = True)
+                      output_layer=True, transposed = True, batch_norm = batch_norm)
     
     if norm_method and norm_method == 'minmax_tanh':
         x = tf.keras.activations.tanh(x)
@@ -279,7 +282,7 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
     output = x 
     return output
 
-def discriminator_AENN(x, relu_alpha,  wgan = False, downscale256 = False):     
+def discriminator_AENN(x, relu_alpha,  wgan = False, downscale256 = False, batch_norm = False, drop_out = False):     
     if downscale256:
         strides_first = 2
     else:
@@ -288,15 +291,15 @@ def discriminator_AENN(x, relu_alpha,  wgan = False, downscale256 = False):
         strides_first = 3
         
     x = conv_block(x, filters = 32, kernel_size=5, strides = strides_first, 
-                      relu_alpha = relu_alpha, wgan = wgan)   
+                      relu_alpha = relu_alpha, wgan = wgan, batch_norm = batch_norm, drop_out = drop_out)   
     x = conv_block(x, filters = 64, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha, wgan = wgan)        
+                      relu_alpha = relu_alpha, wgan = wgan, batch_norm = batch_norm, drop_out = drop_out)        
     x = conv_block(x, filters = 128, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha, wgan = wgan)
+                      relu_alpha = relu_alpha, wgan = wgan, batch_norm = batch_norm, drop_out = drop_out)
     x = conv_block(x, filters = 256, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha, wgan = wgan) 
+                      relu_alpha = relu_alpha, wgan = wgan, batch_norm = batch_norm, drop_out = drop_out) 
     x = conv_block(x, filters = 512, kernel_size=3, strides = 2, 
-                      relu_alpha = relu_alpha, wgan = wgan)
+                      relu_alpha = relu_alpha, wgan = wgan, batch_norm = batch_norm, drop_out = drop_out)
     x = tf.keras.layers.AveragePooling3D(pool_size=(1,8,8))(x)
     x = tf.keras.layers.Flatten()(x)
     
@@ -307,7 +310,7 @@ def discriminator_AENN(x, relu_alpha,  wgan = False, downscale256 = False):
     return output
 
 def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='Tian', 
-                    norm_method = None, downscale256 = False):
+                    norm_method = None, downscale256 = False, batch_norm = False, num_filters = 32):
     inp_dim = (768, 700,1)
     out_dim = (384, 350, 1)
     if downscale256:
@@ -323,7 +326,7 @@ def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='
     elif architecture == 'AENN':
         output = generator_AENN(inp, rnn_type, relu_alpha, 
                                 x_length, y_length, norm_method=norm_method, 
-                                downscale256 = downscale256)
+                                downscale256 = downscale256, batch_norm = batch_norm, num_filters = num_filters)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
     
@@ -339,7 +342,8 @@ def build_generator(rnn_type, relu_alpha, x_length=6, y_length=1, architecture='
     model = tf.keras.Model(inputs=inp, outputs=output, name='Generator')
     return model
 
-def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = False, downscale256 = False):
+def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = False, downscale256 = False, batch_norm = False,
+                       drop_out = False):
     inp_dim = (384, 350, 1)
     if downscale256:
         inp_dim = (256, 256, 1)
@@ -348,7 +352,8 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = Fals
     if architecture == 'Tian':
         output = discriminator_Tian(inp, relu_alpha, wgan)
     elif architecture == 'AENN':
-        output = discriminator_AENN(inp, relu_alpha, wgan, downscale256 = downscale256)
+        output = discriminator_AENN(inp, relu_alpha, wgan, downscale256 = downscale256, 
+                                    batch_norm = batch_norm, drop_out = drop_out)
     else:
         raise Exception('Unkown architecture {}. Option are: Tian, AENN'.format(architecture))
         
@@ -358,7 +363,8 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = Fals
 class GAN(tf.keras.Model):
     def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, 
                  y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_rec = 0.01, g_cycles=1, 
-                 label_smoothing = 0, norm_method = None, wgan = False, downscale256 = False, rec_with_mae=True):
+                 label_smoothing = 0, norm_method = None, wgan = False, downscale256 = False, rec_with_mae=True,
+                 batch_norm = False, drop_out = False):
         '''
         inp_dim: dimensions of input image(s), default 768x700
         out_dim: dimensions of the output image(s), default 384x350
@@ -370,25 +376,28 @@ class GAN(tf.keras.Model):
         l_g: weight of loss GAN for generator
         l_rec: weight of reconstruction loss (mse + mae) for the generator
         g_cycles: how many cycles to train the generator per train cycle
-        label_smoothing: When > 0, we compute the loss between the predicted labels 
+        label_smoothing: Wwen > 0, we compute the loss between the predicted labels 
                           and a smoothed version of the true labels, where the smoothing 
                           squeezes the labels towards 0.5. Larger values of 
                           label_smoothing correspond to heavier smoothing
         norm_method: which normalization method was used. 
                      Can be none or minmax_tanh where data scaled to be between -1 and 1
         wgan: Option to use wasserstein loss (Not fully implemented yet)
-        downscale256: If true than the images are downscaled to 256x256 by using bilinear interpolation
-        rec_with_mae: If true the reconstruction loss is MSE+MAE if false, rec it consists of only the MSE
+        downscale256: if true than the images are downscaled to 256x256 by using bilinear interpolation
+        rec_with_mae: if true the reconstruction loss is MSE+MAE if false, rec it consists of only the MSE
+        batch_norm: if true batch normalization is applied after each convolution(/rnn) block
+        drop_out: if true adds dropout layer after each conv block in the Discriminator (dropout rate of 0.2)
         '''
         super(GAN, self).__init__()      
 
         self.generator = build_generator(rnn_type, x_length=x_length, 
                                          y_length = y_length, relu_alpha=relu_alpha, 
                                          architecture=architecture, norm_method=norm_method,
-                                        downscale256 = downscale256)
+                                        downscale256 = downscale256, batch_norm = batch_norm)
         self.discriminator = build_discriminator(y_length=y_length, 
                                                  relu_alpha=relu_alpha,
-                                                architecture=architecture, wgan = wgan, downscale256 = downscale256)
+                                                architecture=architecture, wgan = wgan, 
+                                                 downscale256 = downscale256, batch_norm = batch_norm, drop_out = drop_out)
         
         self.l_g = l_g
         self.l_rec = l_rec
@@ -452,8 +461,7 @@ class GAN(tf.keras.Model):
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
         
-
-        # Train the discriminator
+      # Train the discriminator
         if train:
             with tf.GradientTape() as tape:
                 predictions = self.discriminator(combined_images)
