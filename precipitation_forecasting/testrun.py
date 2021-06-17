@@ -16,16 +16,16 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 run = wandb.init(project='precipitation-forecasting',
             config={
             'batch_size' : 32,
-            'epochs': 20,
+            'epochs': 50,
             'lr_g': 0.0001,
             'lr_d': 0.0001,
             'l_g': 0.006,
             'l_rec': 1,
             'g_cycles': 3,
-            'label_smoothing': 0,
+            'label_smoothing': 0.2,
             'x_length': 6,
             'y_length': 1,
-            'rnn_type': 'LSTM',
+            'rnn_type': 'GRU',
             'filter_no_rain': 'avg0.01mm',
             'train_data': 'train2015_2018.npy',
             'val_data': 'val2019.npy',
@@ -36,7 +36,8 @@ run = wandb.init(project='precipitation-forecasting',
             'convert_to_dbz': True,
             'load_prep': True,
             'server':  'RU',
-            'rec_with_mae': False
+            'rec_with_mae': False,
+            'y_is_rtcor': True
         })
 config = wandb.config
 
@@ -48,7 +49,7 @@ print(len(list_IDs))
 generator = DataGenerator(list_IDs, batch_size=config.batch_size,
                           x_seq_size=config.x_length, y_seq_size=config.y_length,
                           norm_method = config.norm_method, load_prep=config.load_prep,
-                          downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz)
+                          downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor)
 
 if config.val_data:
     val_IDs = np.load(config.val_data, allow_pickle = True)
@@ -58,7 +59,7 @@ if config.val_data:
     validation_generator = DataGenerator(val_IDs, batch_size = config.batch_size,
                                      x_seq_size = config.x_length, y_seq_size = config.y_length,
                                      norm_method = config.norm_method, load_prep = config.load_prep,
-                                     downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz)
+                                     downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor)
 else:
     validation_generator = None
 # Initialize model
