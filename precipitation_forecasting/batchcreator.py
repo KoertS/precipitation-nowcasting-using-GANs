@@ -16,7 +16,7 @@ class DataGenerator(keras.utils.Sequence):
     def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
                  y_seq_size=24, shuffle=True, load_prep=False,
                 norm_method=None, crop_y=True, pad_x=True,
-                downscale256 = False, convert_to_dbz = False):
+                downscale256 = False, convert_to_dbz = False, y_is_rtcor = False):
         '''
         list_IDs: pair of input and target filenames
         batch_size: size of batch to generate
@@ -68,6 +68,8 @@ class DataGenerator(keras.utils.Sequence):
         if downscale256:
             self.crop_y = self.pad_x = False
         self.convert_to_dbz = convert_to_dbz
+        
+        self.y_is_rtcor = y_is_rtcor
 
     def __len__(self):
         'Denotes the number of batches per epoch'
@@ -194,7 +196,9 @@ class DataGenerator(keras.utils.Sequence):
         return x
         
     def load_y(self, y_ID):
-        if self.load_prep:
+        if self.y_is_rtcor:
+            y = self.load_x(y_ID)
+        elif self.load_prep:
             path = self.y_path + '{}.npy'.format(y_ID)
             y = np.load(path)
         else:
@@ -267,14 +271,15 @@ def r_to_dbz(r):
     # Pixel values are in 0.01mm
     # Convert r to be in mm/h not 0.01mm/h
     r = r / 100
+    # Convert to dBZ
     return 10 * tf_log10(200*r**(8/5)+1) 
 
 def tf_log10(x):
-  numerator = tf.math.log(x)
-  denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
-  return numerator / denominator
+    numerator = tf.math.log(x)
+    denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
+    return numerator / denominator
 
-def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None):
+def get_list_IDs(start_dt, end_dt, x_seq_size=6, y_seq_size=1, filter_no_rain=None, y_interval = 5):
     '''
     This function returns filenames between the a starting date and end date. 
     The filenames are packed into input and output arrays.
@@ -285,6 +290,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None
     filter_no_rain: If None than use all samples, 
         if sum30mm than filter less than 30mm per image, 
         if avg0.01mm than filter out samples with average rain below 0.01mm/pixel
+    y_interval: time between x and y and between y1 and y2     
     '''
     
     
@@ -302,7 +308,7 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None
     # Convert to filenames
     list_IDs = []
     for dt in dts:
-        list_ID = xs, ys =  get_filenames_xy(dt,x_seq_size,y_seq_size)
+        list_ID = xs, ys =  get_filenames_xy(dt,x_seq_size,y_seq_size, y_interval)
 
         if filter_no_rain:
             try:
@@ -317,22 +323,25 @@ def get_list_IDs(start_dt, end_dt,x_seq_size=6,y_seq_size=1, filter_no_rain=None
             list_IDs.append(list_ID)
     return list_IDs 
 
-def get_filenames_xy(dt, x_size=5, y_size=1):
+def get_filenames_xy(dt, x_size=6, y_size=1, y_interval = 5):
     '''
     Returns the filenames of the input x and target y. 
     dt: datetime of sample (year month day hour minute)
     x_size: how many samples to take before datetime
     y_size: how many samples to take after datetime 
+    y_interval: time between x and y and between y1 and y2
     '''
+    assert y_interval%5==0 and y_interval!=0
+    
     xs = []
-    for i in range(x_size,0,-1):
-        dt_i = dt - i*timedelta(minutes=5)
+    for i in range(x_size-1,-1,-1):
+        dt_i = dt - i*timedelta(minutes=5) - timedelta(minutes=y_interval)
         ts = '{:%Y%m%d%H%M}'.format(dt_i)
         xs.append(ts)
         
     ys = []
     for i in range(0,y_size,1):
-        dt_i = dt + i*timedelta(minutes=5)
+        dt_i = dt + i * timedelta(minutes=y_interval)
         ts = '{:%Y%m%d%H%M}'.format(dt_i)
         ys.append(ts)
     return xs,ys
