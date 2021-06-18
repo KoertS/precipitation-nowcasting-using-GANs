@@ -8,16 +8,32 @@ from batchcreator import minmax
 class ImageLogger(tf.keras.callbacks.Callback):
     '''
     This visualizes the predictions of the model.
-    x_test: model input (validation)
-    y_test: target data
-    n: indicates how many images to plot
+    generator: datagenerator that yields x and y pairs
+    persistent: when false a new random batch of images is plotted after each epoch. 
+                if true the same random batch of images is drawn after each epoch
+    train_data: True if generator is the training generator, false if it is the validation generator
     '''
-    def __init__(self, generator):
+    def __init__(self, generator, persistent = False, train_data = True):
         self.generator = generator
+        
+        self.persistent = persistent
+        if persistent:
+            self.idx = np.random.randint(0,len(self.generator))
+            
+        # Set the name displayed in the wandb interface
+        if train_data:
+            self.wandb_title = "Targets & Predictions"
+        else:
+            self.wandb_title = "Targets & Predictions (val)"
         super(ImageLogger, self).__init__()
 
     def on_epoch_end(self, logs, epoch):
-        xs, ys = self.generator.__getitem__(np.random.randint(0,len(self.generator)))
+        if self.persistent:
+            idx = self.idx
+        else:
+            idx = np.random.randint(0,len(self.generator))
+          
+        xs, ys = self.generator.__getitem__(idx)
        
         predictions = self.model.predict(xs)
         images = ys
@@ -34,7 +50,7 @@ class ImageLogger(tf.keras.callbacks.Callback):
             plot = plot_target_pred(images[i], predictions[i])
             plots.append(plot)
             
-        wandb.log({"Targets & Predictions": [wandb.Image(plot)
+        wandb.log({self.wandb_title: [wandb.Image(plot)
                               for plot in plots]})
         plt.close('all')
 
@@ -61,13 +77,10 @@ class GradientLogger(tf.keras.callbacks.Callback):
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
         
-        # Add random noise to the labels - important trick!
-        #labels += 0.05 * tf.random.uniform(tf.shape(labels))
-
         # Train the discriminator
         with tf.GradientTape() as tape:
             predictions = self.model.discriminator(combined_images)
-            d_loss = self.model.loss_fn(labels, predictions)
+            d_loss = self.model.loss_fn_d(labels, predictions)
         grads_d = tape.gradient(d_loss, self.model.discriminator.trainable_weights)
 
         # Assemble labels that say "all real images"
@@ -79,9 +92,9 @@ class GradientLogger(tf.keras.callbacks.Callback):
             generated_images = self.model.generator(xs)
             predictions = self.model.discriminator(generated_images)
             g_loss_gan = self.model.loss_fn(misleading_labels, predictions)
-            g_loss_mse = self.model.loss_mse(ys, generated_images)
-            g_loss_mae = self.model.loss_mae(ys, generated_images)
-            g_loss = self.model.l_g * g_loss_gan  + self.model.l_rec * (g_loss_mse+g_loss_mae)       
+            
+            g_loss_rec = self.model.loss_rec(ys, generated_images, self.model.rec_with_mae)
+            g_loss =  self.model.l_g * g_loss_gan  + self.model.l_rec * g_loss_rec    
         grads_g = tape.gradient(g_loss, self.model.generator.trainable_weights)
         
         grads_g = [item.numpy().flatten() for sublist in grads_g for item in sublist]
