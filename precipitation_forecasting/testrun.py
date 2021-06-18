@@ -27,8 +27,8 @@ run = wandb.init(project='precipitation-forecasting',
             'y_length': 1,
             'rnn_type': 'GRU',
             'filter_no_rain': 'avg0.01mm',
-            'train_data': 'train2015_2018.npy',
-            'val_data': 'val2019.npy',
+            'train_data': 'train2015_2018_1y_30m.npy',
+            'val_data': 'val2019_1y_30m.npy',
             'architecture': 'AENN',
             'model': 'GAN',
             'norm_method': 'minmax',
@@ -59,7 +59,8 @@ if config.val_data:
     validation_generator = DataGenerator(val_IDs, batch_size = config.batch_size,
                                      x_seq_size = config.x_length, y_seq_size = config.y_length,
                                      norm_method = config.norm_method, load_prep = config.load_prep,
-                                     downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor)
+                                     downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, 
+                                         y_is_rtcor = config.y_is_rtcor)
 else:
     validation_generator = None
 # Initialize model
@@ -69,13 +70,15 @@ if config.model == 'GAN':
                 l_g = config.l_g, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
-    callbacks = [WandbCallback(), logger.ImageLogger(generator), logger.GradientLogger(generator)]
+    callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),  
+                 logger.ImageLogger(val_generator, persistent = True, train_data = False), logger.GradientLogger(generator)]
 else:
     model = build_generator(architecture=config.architecture, rnn_type=config.rnn_type, relu_alpha=0.2,
             x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
     opt = tf.keras.optimizers.Adam(learning_rate=config.lr_g)
     model.compile(loss='mse', metrics=['mse', 'mae'])
-    callbacks = [WandbCallback(), logger.ImageLogger(generator)]
+    callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True), 
+                 logger.ImageLogger(val_generator, persistent = True, train_data = False)]
 
 history = model.fit(generator, validation_data = validation_generator, epochs = config.epochs,
                     callbacks = callbacks)
