@@ -257,7 +257,7 @@ def generator_AENN(x, rnn_type='GRU', relu_alpha=0.2, x_length=6, y_length=1, no
         x, _ = convRNN_block(x, filters = num_filters * 4, kernel_size=3, strides = 1, 
                       relu_alpha = relu_alpha,  rnn_type=rnn_type, batch_norm = batch_norm) 
         x, _ = convRNN_block(x, filters = num_filters * 4, kernel_size=3, strides = 1, 
-                      relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences=False, batch_norm = batch_norm) 
+                      relu_alpha = relu_alpha,  rnn_type=rnn_type, return_sequences = False, batch_norm = batch_norm) 
        
         x = tf.keras.layers.Reshape(target_shape=(y_length,32,32,num_filters * 4))(x)
     # Decoder:
@@ -362,7 +362,7 @@ def build_discriminator(relu_alpha, y_length, architecture = 'Tian', wgan = Fals
 
 class GAN(tf.keras.Model):
     def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, 
-                 y_length=1, relu_alpha=0.2, architecture='Tian', l_g = 1, l_rec = 0.01, g_cycles=1, 
+                 y_length=1, relu_alpha=0.2, architecture='Tian', l_adv = 1, l_rec = 0.01, g_cycles=1, 
                  label_smoothing = 0, norm_method = None, wgan = False, downscale256 = False, rec_with_mae=True,
                  batch_norm = False, drop_out = False):
         '''
@@ -373,7 +373,7 @@ class GAN(tf.keras.Model):
         y_length: length of output sequence
         relu_alpha: slope of leaky relu layers
         architecture: either 'Tian' or 'AENN'
-        l_g: weight of loss GAN for generator
+        l_adv: weight of the adverserial loss for generator
         l_rec: weight of reconstruction loss (mse + mae) for the generator
         g_cycles: how many cycles to train the generator per train cycle
         label_smoothing: Wwen > 0, we compute the loss between the predicted labels 
@@ -394,12 +394,18 @@ class GAN(tf.keras.Model):
                                          y_length = y_length, relu_alpha=relu_alpha, 
                                          architecture=architecture, norm_method=norm_method,
                                         downscale256 = downscale256, batch_norm = batch_norm)
-        self.discriminator = build_discriminator(y_length=y_length, 
+        
+        self.discriminator_frame = build_discriminator(y_length=1, 
                                                  relu_alpha=relu_alpha,
                                                 architecture=architecture, wgan = wgan, 
                                                  downscale256 = downscale256, batch_norm = batch_norm, drop_out = drop_out)
-        
-        self.l_g = l_g
+        self.y_length = y_length
+        if y_length > 1:
+            self.discriminator_seq = build_discriminator(y_length=y_length, 
+                                                     relu_alpha=relu_alpha,
+                                                    architecture=architecture, wgan = wgan, 
+                                                     downscale256 = downscale256, batch_norm = batch_norm, drop_out = drop_out)
+        self.l_adv = l_adv
         self.l_rec = l_rec
         self.g_cycles=g_cycles
         self.label_smoothing=label_smoothing
@@ -418,10 +424,16 @@ class GAN(tf.keras.Model):
         self.loss_mse = tf.keras.losses.MeanSquaredError()
         self.loss_mae = tf.keras.losses.MeanAbsoluteError()
         
-        self.g_loss_metric = tf.keras.metrics.Mean(name="g_loss")
-        self.d_loss_metric = tf.keras.metrics.Mean(name="d_loss")
+        self.g_loss_metric_frame = tf.keras.metrics.Mean(name="g_loss_frame")
+        self.g_loss_metric_seq = tf.keras.metrics.Mean(name="g_loss_seq")
+        
+        self.d_loss_metric_frame= tf.keras.metrics.Mean(name="d_loss_frame")
+        self.d_loss_metric_seq = tf.keras.metrics.Mean(name="d_loss_seq")
+        
+        self.d_acc_frame = tf.keras.metrics.BinaryAccuracy(name='d_acc_frame')
+        self.d_acc_seq = tf.keras.metrics.BinaryAccuracy(name='d_acc_seq')
+        
         self.rec_metric = tf.keras.metrics.Mean(name="rec_loss")
-        self.d_acc = tf.keras.metrics.BinaryAccuracy(name='d_acc')
         
         if self.wgan:
             self.opt = RMSprop(lr=0.00005)
@@ -446,10 +458,52 @@ class GAN(tf.keras.Model):
 
     @property
     def metrics(self):
-        return [self.d_loss_metric, self.g_loss_metric, self.rec_metric, self.d_acc]
+        return [self.d_loss_metric_frame, self.d_loss_metric_seq, 
+                self.g_loss_metric_frame, self.g_loss_metric_seq, self.rec_metric, 
+                self.d_acc_frame, self.d_acc_seq]
     
+    def train_disc_seq(self, inp, labels, train = True ):
+        if train:
+            with tf.GradientTape() as tape:
+                predictions = self.discriminator_seq(inp)
+                d_loss_seq = self.loss_fn_d(labels, predictions)
+            grads = tape.gradient(d_loss_seq, self.discriminator_seq.trainable_weights)
+            self.d_optimizer.apply_gradients(
+                zip(grads, self.discriminator_seq.trainable_weights)
+            )
+        else:
+            predictions = self.discriminator_seq(inp)
+            d_loss_seq = self.loss_fn_d(labels, predictions)
+        # Update D accuracy metric
+        self.d_acc_seq.update_state(labels, predictions)
+        return d_loss_seq
     
-    def train_discriminator(self, xs , ys, batch_size, train = True):
+    def train_disc_frame(self, inp, labels, train = True ):
+        if train:
+            with tf.GradientTape() as tape:
+                d_loss_frame = 0
+                for i in range(self.y_length):
+                    frame = inp[:,i:i+1]
+                    predictions = self.discriminator_frame(frame)
+                    d_loss_frame += self.loss_fn_d(labels, predictions)
+            grads = tape.gradient(d_loss_frame, self.discriminator_frame.trainable_weights)
+            self.d_optimizer.apply_gradients(
+                zip(grads, self.discriminator_frame.trainable_weights)
+            )
+        else:
+            d_loss_frame = 0
+            for i in range(self.y_length):
+                frame = inp[:,i:i+1]
+                predictions = self.discriminator_frame(frame)
+                d_loss_frame += self.loss_fn_d(labels, predictions)
+                
+        # Update D accuracy metric
+        # TODO: calculate average accuracy over the frames
+        # Now d_acc_frame is accuracy on the last frame
+        self.d_acc_frame.update_state(labels, predictions)
+        return d_loss_frame
+    
+    def train_discriminators(self, xs , ys, batch_size, train = True):
         # Decode them to fake images
         generated_images = self.generator(xs)
 
@@ -461,21 +515,16 @@ class GAN(tf.keras.Model):
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
         )
         
-      # Train the discriminator
-        if train:
-            with tf.GradientTape() as tape:
-                predictions = self.discriminator(combined_images)
-                d_loss = self.loss_fn_d(labels, predictions)
-            grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
-            self.d_optimizer.apply_gradients(
-                zip(grads, self.discriminator.trainable_weights)
-            )
+        # Train the frame discriminator
+        d_loss_frame = self.train_disc_frame(combined_images, labels, train)
+        
+        # Train the sequence discriminator
+        if self.y_length > 1:
+            d_loss_seq = self.train_disc_seq(combined_images, labels, train)
         else:
-            predictions = self.discriminator(combined_images)
-            d_loss = self.loss_fn(labels, predictions)
-        # Update D accuracy metric
-        self.d_acc.update_state(labels, predictions)
-        return d_loss
+            d_loss_seq = d_loss_frame
+        
+        return d_loss_frame, d_loss_seq
 
     def train_generator(self, xs, ys, batch_size, train = True):
         # Assemble labels that say "all real images"
@@ -487,19 +536,27 @@ class GAN(tf.keras.Model):
             for _ in range(self.g_cycles):
                 with tf.GradientTape() as tape:
                     generated_images = self.generator(xs)
-                    predictions = self.discriminator(generated_images)
-                    g_loss_gan = self.loss_fn(misleading_labels, predictions)
+                    adv_loss_frame = self.train_disc_frame(generated_images, misleading_labels, train = False)
+                    if self.y_length > 1:
+                        adv_loss_seq = self.train_disc_seq(generated_images, misleading_labels, train = False)
+                    else:
+                        adv_loss_seq = adv_loss_frame
+                    g_loss_adv = adv_loss_frame + adv_loss_seq
                     g_loss_rec = self.loss_rec(ys, generated_images, self.rec_with_mae)
-                    g_loss =  self.l_g * g_loss_gan  + self.l_rec * g_loss_rec           
+                    g_loss =  self.l_adv * g_loss_adv  + self.l_rec * g_loss_rec           
                 grads = tape.gradient(g_loss, self.generator.trainable_weights)
                 self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
         else:
             generated_images = self.generator(xs)
-            predictions = self.discriminator(generated_images)
-            g_loss_gan = self.loss_fn(misleading_labels, predictions)
+            adv_loss_frame = self.train_disc_frame(generated_images, misleading_labels, train = False)
+            if self.y_length > 1:
+                adv_loss_seq = self.train_disc_seq(generated_images, misleading_labels, train = False)
+            else:
+                adv_loss_seq = 0
+            g_loss_adv = adv_loss_frame + adv_loss_seq
             g_loss_rec = self.loss_rec(ys, generated_images, self.rec_with_mae)
-            g_loss = self.l_g * g_loss_gan  + self.l_rec * g_loss_rec  
-        return g_loss_gan, g_loss_rec
+            g_loss =  self.l_adv * g_loss_adv  + self.l_rec * g_loss_rec 
+        return adv_loss_frame, adv_loss_seq, g_loss_rec
     
     def model_step(self, batch, train = True):
         '''
@@ -511,20 +568,33 @@ class GAN(tf.keras.Model):
         xs, ys = batch
         batch_size = tf.shape(xs)[0]
 
-        d_loss = self.train_discriminator(xs,ys,batch_size,train)
-        g_loss_gan, g_loss_rec  = self.train_generator(xs,ys,batch_size,train)
+        d_loss_frame, d_loss_seq = self.train_discriminators(xs,ys,batch_size,train)
+        g_loss_frame, g_loss_seq, g_loss_rec  = self.train_generator(xs,ys,batch_size,train)
 
 
         # Update metrics
-        self.d_loss_metric.update_state(d_loss)
-        self.g_loss_metric.update_state(g_loss_gan)
+        self.d_loss_metric_frame.update_state(d_loss_frame)
+        self.d_loss_metric_seq.update_state(d_loss_seq)
+        self.g_loss_metric_frame.update_state(g_loss_frame)
+        self.g_loss_metric_seq.update_state(g_loss_seq)
         self.rec_metric.update_state(g_loss_rec)
          
-        return {
-            "d_loss": self.d_loss_metric.result(),
-            "g_loss": self.g_loss_metric.result(),
+        if self.y_length > 1:    
+            return {
+                "d_loss_frame": self.d_loss_metric_frame.result(),
+                "d_loss_seq": self.d_loss_metric_seq.result(),
+                "g_loss_frame": self.g_loss_metric_frame.result(),
+                "g_loss_seq": self.g_loss_metric_seq.result(),
+                "rec_loss": self.rec_metric.result(),
+                "d_acc_frame": self.d_acc_frame.result(),
+                'd_acc_seq': self.d_acc_seq.result()
+            } 
+        else:
+            return {
+            "d_loss_frame": self.d_loss_metric_frame.result(),
+            "g_loss_frame": self.g_loss_metric_frame.result(),
             "rec_loss": self.rec_metric.result(),
-            "d_acc": self.d_acc.result()
+            "d_acc_frame": self.d_acc_frame.result(),
         } 
             
     def train_step(self, batch):
@@ -532,5 +602,6 @@ class GAN(tf.keras.Model):
         return metric_dict
     
     def test_step(self, batch):
+        print('validation step')
         metric_dict = self.model_step(batch, train = False)       
         return metric_dict
