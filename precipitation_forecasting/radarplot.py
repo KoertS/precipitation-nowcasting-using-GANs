@@ -106,32 +106,34 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
         return im
 
 def plot_target_pred(target,pred, vmin = 0):
-    data = [np.squeeze(target), np.squeeze(pred)]
+    data = [target, pred]
     vmax = np.max(data)
 
-
+    
+    n = target.shape[0]
     # Set up figure and image grid
-    fig = plt.figure() #figsize=(9, 9))
+    fig = plt.figure(figsize=(9,9)) 
 
     grid = ImageGrid(fig, 111,          # as in plt.subplot(111)
-                     nrows_ncols=(1,2),
-                     axes_pad=0.15,
+                     nrows_ncols=(n,2),
+                     axes_pad=0.01,
                      share_all=True,
                      cbar_location="right",
                      cbar_mode="single",
                      cbar_size="7%",
-                     cbar_pad=0.15
+                     cbar_pad=0.1
                      )
-
-    im = grid[0].imshow(data[0], vmin=vmin, vmax=vmax)
+    for i in range(n):
+        im = grid[i*2].imshow(np.squeeze(data[0][i]), vmin=vmin, vmax=vmax)
+        grid[i*2].axis('off')
     grid[0].set_title('y')
-    grid[0].axis('off')
-    im = grid[1].imshow(data[1], vmin=vmin, vmax=vmax)
+    for i in range(n):
+        im = grid[1+2*i].imshow(np.squeeze(data[1][i]), vmin=vmin, vmax=vmax)
+        grid[1+2*i].axis('off') 
     grid[1].set_title('y_pred')
-    grid[1].axis('off')   
     # Colorbar
     plt.colorbar(im, cax=grid.cbar_axes[0])
-    grid[1].cax.toggle_label(True)
+    #grid[1].cax.toggle_label(True)
 
-   # plt.tight_layout()    # Works, but may still require rect paramater to keep colorbar labels visible
+    #plt.tight_layout(rect=(0,0,1,1))    # Works, but may still require rect paramater to keep colorbar labels visible
     return fig

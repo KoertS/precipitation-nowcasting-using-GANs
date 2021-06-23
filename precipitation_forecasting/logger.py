@@ -36,16 +36,12 @@ class ImageLogger(tf.keras.callbacks.Callback):
         xs, ys = self.generator.__getitem__(idx)
        
         predictions = self.model.predict(xs)
-        images = ys
-        
+      
         if self.model.norm_method and self.model.norm_method == 'minmax_tanh':
             predictions = minmax(predictions, tanh=True, undo=True)   
-            images = minmax(images, tanh = True, undo=True)  
+            ys = minmax(ys, tanh = True, undo=True)  
            
-        predictions = np.squeeze(predictions)
-        images =np.squeeze(ys)
         plots = []
-        
         for i in range(len(images)):
             plot = plot_target_pred(images[i], predictions[i])
             plots.append(plot)
@@ -59,7 +55,6 @@ class GradientLogger(tf.keras.callbacks.Callback):
         self.generator = generator
 
         super(GradientLogger, self).__init__()
-
     
     def on_epoch_end(self, logs, epoch):
         xs, ys = self.generator.__getitem__(np.random.randint(0,len(self.generator)))
