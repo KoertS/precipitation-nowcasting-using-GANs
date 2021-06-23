@@ -42,8 +42,8 @@ class ImageLogger(tf.keras.callbacks.Callback):
             ys = minmax(ys, tanh = True, undo=True)  
            
         plots = []
-        for i in range(len(images)):
-            plot = plot_target_pred(images[i], predictions[i])
+        for i in range(len(ys)):
+            plot = plot_target_pred(ys[i], predictions[i])
             plots.append(plot)
             
         wandb.log({self.wandb_title: [wandb.Image(plot)
