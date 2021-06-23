@@ -105,7 +105,7 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
             plt.colorbar()
         return im
 
-def plot_target_pred(target,pred, vmin = 0):
+def plot_target_pred(target, pred, vmin = 0):
     data = [target, pred]
     vmax = np.max(data)
 
@@ -116,7 +116,7 @@ def plot_target_pred(target,pred, vmin = 0):
 
     grid = ImageGrid(fig, 111,          # as in plt.subplot(111)
                      nrows_ncols=(n,2),
-                     axes_pad=0.01,
+                     axes_pad=0.02,
                      share_all=True,
                      cbar_location="right",
                      cbar_mode="single",

@@ -61,41 +61,23 @@ class GradientLogger(tf.keras.callbacks.Callback):
         
         batch_size = tf.shape(xs)[0]
 
-        # Decode them to fake images
-        generated_images = self.model.generator(xs)
-
-        # Combine them with real images
-        combined_images = tf.concat([generated_images, ys], axis=0)
-
-        # Assemble labels discriminating real from fake images
-        labels = tf.concat(
-            [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
-        )
-        
-        # Train the discriminator
-        with tf.GradientTape() as tape:
-            predictions = self.model.discriminator(combined_images)
-            d_loss = self.model.loss_fn_d(labels, predictions)
-        grads_d = tape.gradient(d_loss, self.model.discriminator.trainable_weights)
 
         # Assemble labels that say "all real images"
         misleading_labels = tf.zeros((batch_size, 1))
-
-        # Train the generator (note that we should *not* update the weights
-        # of the discriminator)!
         with tf.GradientTape() as tape:
             generated_images = self.model.generator(xs)
-            predictions = self.model.discriminator(generated_images)
-            g_loss_gan = self.model.loss_fn(misleading_labels, predictions)
+            adv_loss_frame = self.model.train_disc_frame(generated_images, misleading_labels, train = False)
             
+            if self.model.y_length > 1:
+                adv_loss_seq = self.model.train_disc_seq(generated_images, misleading_labels, train = False)
+            else:
+                adv_loss_seq = adv_loss_frame
+            g_loss_adv = adv_loss_frame + adv_loss_seq
             g_loss_rec = self.model.loss_rec(ys, generated_images, self.model.rec_with_mae)
-            g_loss =  self.model.l_g * g_loss_gan  + self.model.l_rec * g_loss_rec    
+            g_loss =  self.model.l_adv * g_loss_adv  + self.model.l_rec * g_loss_rec           
         grads_g = tape.gradient(g_loss, self.model.generator.trainable_weights)
-        
+  
         grads_g = [item.numpy().flatten() for sublist in grads_g for item in sublist]
         grads_g = [item for sublist in grads_g for item in sublist]
-        
-        grads_d = [item.numpy().flatten() for sublist in grads_d for item in sublist]
-        grads_d = [item for sublist in grads_d for item in sublist]
             
-        wandb.log({'grads_g': wandb.Histogram(grads_g), 'grads_d': wandb.Histogram(grads_d)})        
+        wandb.log({'grads_g': wandb.Histogram(grads_g)})        

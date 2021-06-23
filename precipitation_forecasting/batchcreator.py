@@ -70,11 +70,20 @@ class DataGenerator(keras.utils.Sequence):
         self.convert_to_dbz = convert_to_dbz
         
         self.y_is_rtcor = y_is_rtcor
+        
+        # current index parameter is needed for if we want to iterate with the generator
+        # (next(generator)
+        self.cur_idx = 0
 
     def __len__(self):
         'Denotes the number of batches per epoch'
         return int(np.floor(len(self.list_IDs) / self.batch_size))
-
+    
+    def __iter__(self):
+        'Retrieves next batch. Allows the generator to be a iterator when using next(generator)'
+        self.cur_idx += 1
+        return self[self.cur_idx]
+    
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
