@@ -13,6 +13,8 @@ from tensorflow.keras import backend
 from tensorflow.keras.constraints import Constraint
 from RepeatVector4D import RepeatVector4D
 
+from batchcreator import minmax, dbz_to_r
+
 # implementation of wasserstein loss
 def wasserstein_loss(y_true, y_pred):
     return backend.mean(y_true * y_pred)
@@ -364,7 +366,7 @@ class GAN(tf.keras.Model):
     def __init__(self, inp_dim = (768,700,1), out_dim = (384, 350, 1), rnn_type='GRU', x_length=6, 
                  y_length=1, relu_alpha=0.2, architecture='Tian', l_adv = 1, l_rec = 0.01, g_cycles=1, 
                  label_smoothing = 0, norm_method = None, wgan = False, downscale256 = False, rec_with_mae=True,
-                 batch_norm = False, drop_out = False):
+                 batch_norm = False, drop_out = False, r_to_dbz = False):
         '''
         inp_dim: dimensions of input image(s), default 768x700
         out_dim: dimensions of the output image(s), default 384x350
@@ -376,12 +378,13 @@ class GAN(tf.keras.Model):
         l_adv: weight of the adverserial loss for generator
         l_rec: weight of reconstruction loss (mse + mae) for the generator
         g_cycles: how many cycles to train the generator per train cycle
-        label_smoothing: Wwen > 0, we compute the loss between the predicted labels 
+        label_smoothing: When > 0, we compute the loss between the predicted labels 
                           and a smoothed version of the true labels, where the smoothing 
                           squeezes the labels towards 0.5. Larger values of 
                           label_smoothing correspond to heavier smoothing
         norm_method: which normalization method was used. 
                      Can be none or minmax_tanh where data scaled to be between -1 and 1
+        r_to_dbz: If true the data values are in dbz not in r (mm/h)
         wgan: Option to use wasserstein loss (Not fully implemented yet)
         downscale256: if true than the images are downscaled to 256x256 by using bilinear interpolation
         rec_with_mae: if true the reconstruction loss is MSE+MAE if false, rec it consists of only the MSE
@@ -410,6 +413,7 @@ class GAN(tf.keras.Model):
         self.g_cycles=g_cycles
         self.label_smoothing=label_smoothing
         self.norm_method=norm_method
+        self.r_to_dbz = r_to_dbz
         self.wgan = wgan
         self.rec_with_mae = rec_with_mae
         
@@ -434,7 +438,7 @@ class GAN(tf.keras.Model):
         self.d_acc_seq = tf.keras.metrics.BinaryAccuracy(name='d_acc_seq')
         
         self.rec_metric = tf.keras.metrics.Mean(name="rec_loss")
-        
+
         if self.wgan:
             self.opt = RMSprop(lr=0.00005)
             self.loss_fn = wasserstein_loss
@@ -459,8 +463,8 @@ class GAN(tf.keras.Model):
     @property
     def metrics(self):
         return [self.d_loss_metric_frame, self.d_loss_metric_seq, 
-                self.g_loss_metric_frame, self.g_loss_metric_seq, self.rec_metric, 
-                self.d_acc_frame, self.d_acc_seq]
+                self.g_loss_metric_frame, self.g_loss_metric_seq, 
+                self.rec_metric, self.d_acc_frame, self.d_acc_seq]
     
     def train_disc_seq(self, inp, labels, train = True ):
         if train:
@@ -556,7 +560,16 @@ class GAN(tf.keras.Model):
             g_loss_adv = adv_loss_frame + adv_loss_seq
             g_loss_rec = self.loss_rec(ys, generated_images, self.rec_with_mae)
             g_loss =  self.l_adv * g_loss_adv  + self.l_rec * g_loss_rec 
+            
+            
         return adv_loss_frame, adv_loss_seq, g_loss_rec
+    
+    def undo_prep(self, x):
+        if self.norm_method:
+            x = minmax(x, norm_method = self.norm_method, convert_to_dbz = self.r_to_dbz, undo = True)
+        if self.r_to_dbz:
+            x = dbz_to_r(x)
+        return x
     
     def model_step(self, batch, train = True):
         '''
@@ -602,6 +615,5 @@ class GAN(tf.keras.Model):
         return metric_dict
     
     def test_step(self, batch):
-        print('validation step')
         metric_dict = self.model_step(batch, train = False)       
         return metric_dict
