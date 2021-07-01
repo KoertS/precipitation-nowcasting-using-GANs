@@ -14,7 +14,7 @@ class Evaluator:
     save_after_n_sample: if higher than 0, the evaluator will save its dictionary after it has seen n samples. 
     '''
     def __init__(self, nowcast_method = 'S-prog', thresholds = [0.05, 0.5, 5, 10, 30], leadtimes = [30,60,90], save_after_n_samples = 0):
-        self.nowcast_method = 'S-PROG'
+        self.nowcast_method = nowcast_method
     
         ## Create dictionaries to compute the model errors
         # dict for each threshold and leadtime combination. shape = (n_leadtimes, n_thresholds))
