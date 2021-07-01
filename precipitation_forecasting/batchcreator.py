@@ -71,18 +71,15 @@ class DataGenerator(keras.utils.Sequence):
         
         self.y_is_rtcor = y_is_rtcor
         
-        # current index parameter is needed for if we want to iterate with the generator
-        # (next(generator)
-        self.cur_idx = 0
 
     def __len__(self):
         'Denotes the number of batches per epoch'
         return int(np.floor(len(self.list_IDs) / self.batch_size))
     
-    def __iter__(self):
-        'Retrieves next batch. Allows the generator to be a iterator when using next(generator)'
-        self.cur_idx += 1
-        return self[self.cur_idx]
+#     def __iter__(self):
+#         'Retrieves next batch. Allows the generator to be a iterator when using next(generator)'
+#         self.cur_idx += 1
+#         return self[self.cur_idx]
     
     def __getitem__(self, index):
         'Generate one batch of data'
@@ -246,31 +243,54 @@ class DataGenerator(keras.utils.Sequence):
 
         return tf.pad(x, paddings=npad, constant_values=0)
 
-def minmax(x, tanh=False, undo=False, convert_to_dbz = False):
+def minmax(x, norm_method='minmax', convert_to_dbz = False, undo = False):
     '''
     Performs minmax scaling to scale the images to range of 0 to 1.
-    If tanh is True than scale to -1 to 1 as tanh is used for activation function generator
+    norm_method: 'minmax' or 'minmax_tanh'. If tanh is used than scale to -1 to 1 as tanh
+                is used for activation function generator, else scale values to be between 0 and 1
     '''
+    assert norm_method == 'minmax' or norm_method == 'minmax_tanh'
+    
     # pixel values are in 0.01mm
     # define max intensity as 100mm
     MIN = 0
     MAX = 10000
     
-    if convert_to_dbz:
-        MAX = 55
-        x = r_to_dbz(x)
     if not undo:
+        if convert_to_dbz:
+            MAX = 55
+            x = r_to_dbz(x)
         # Set values over 100mm/h to 100mm/h
         x = tf.clip_by_value(x, MIN, MAX)
-        if tanh:
+        if norm_method == 'minmax_tanh':
             x = (x - MIN - MAX/2)/(MAX/2 - MIN) 
         else:
             x = (x - MIN)/(MAX- MIN)
     else:
-        if tanh:
+        if convert_to_dbz:
+            MAX = 55
+        if norm_method == 'minmax_tanh':
             x = x*(MAX/2 - MIN) + MIN + MAX/2
         else:
-            x = x*(MAX - MIN) + MIN
+            x = x*(MAX - MIN) + MIN           
+    return x
+
+def undo_prep(x, in_0_01mmh = False):
+    '''
+    Convert the normalized dbz values back to unnormalized mm/h values
+    in_0_01mmh: If true convert the values back to 0.01mm/h (value 1 = 0.01mm/h). This is what the original data was like
+    '''
+    # First unnormalize
+    MAX = 55
+    x = x*(MAX - MIN) + MIN  
+    
+    # Convert dbz to r
+    x = dbz_to_r(x)
+    
+    
+    if in_0_01mmh:
+        x *= 100
+        
     return x
 
 def r_to_dbz(r):
@@ -282,6 +302,13 @@ def r_to_dbz(r):
     r = r / 100
     # Convert to dBZ
     return 10 * tf_log10(200*r**(8/5)+1) 
+
+def dbz_to_r(dbz):
+    '''
+    Convert dbz to mm/h
+    '''
+    r = ((10**(dbz/10))/200)**(5/8)
+    return r
 
 def tf_log10(x):
     numerator = tf.math.log(x)
@@ -354,3 +381,54 @@ def get_filenames_xy(dt, x_size=6, y_size=1, y_interval = 5):
         ts = '{:%Y%m%d%H%M}'.format(dt_i)
         ys.append(ts)
     return xs,ys
+
+from pysteps.io import archive, read_timeseries, get_method
+from pysteps.utils import conversion
+def load_fns_pysteps(list_ID):
+    '''
+    Load radar images corresponding to list of filenames.
+    The functions returns the input images, the target images and metadata.
+    This function is used to return the radar images needed for pysteps
+    list_ID: tuple of input and target filenames, example [[x1,..., x6], [y1,y2,y3]]
+    '''
+    x_length = 6
+    y_length = 3    
+    
+    #  Parameters for the loading of files
+    root_path = conf.dir_rtcor    # directions to data directory
+    path_fmt = "%Y/%m" # how files are sorted in folders (no subfolders)
+    fn_pattern = conf.prefix_rtcor+"%Y%m%d%H%M" # filename pattern
+    fn_ext = "h5"   # filename extension
+    timestep = 5
+    importer_name = "knmi_hdf5"
+    importer_kwargs = {"accutime": 5,
+                      "qty": "ACRR",
+                      "pixelsize": 1.0}                       # dict of importer arguments for qty, accutime, pixelsize
+    
+    dt_inp = list_ID[0][-1]
+    dt_inp = datetime.strptime(dt_inp, "%Y%m%d%H%M")
+
+    dt_target = list_ID[1][-1]
+    dt_target = datetime.strptime(dt_target, "%Y%m%d%H%M")
+    
+    # find files
+    fns_inp = archive.find_by_date(
+      dt_inp, root_path, path_fmt, fn_pattern, fn_ext, timestep=5, num_prev_files=x_length-1
+    )
+    fns_target = archive.find_by_date(
+      dt_target, root_path, path_fmt, fn_pattern, fn_ext, timestep=30, num_prev_files=y_length-1
+    )
+  
+    # Read the radar composites
+    importer = get_method(importer_name, "importer") 
+    Z, _, metadata_R = read_timeseries(fns_inp, importer, **importer_kwargs)
+
+    # Convert to rain rate
+    R, metadata_R = conversion.to_rainrate(Z, metadata_R)
+
+    Z, _, metadata = read_timeseries(fns_target, importer, **importer_kwargs)
+
+    # Convert to rain rate
+    R_target, metadata = conversion.to_rainrate(Z, metadata)
+
+    return R, R_target, metadata_R
