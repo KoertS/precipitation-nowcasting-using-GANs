@@ -42,14 +42,14 @@ class Evaluator:
             self.save_accum_scores(n_samples)
 
     def get_scores(self):
-        # Merge lead times together
-        merge_cats = [det_cat_fct_merge(self.cat_dicts[0][i], self.cat_dicts[1][i]) for i in range(len(self.thresholds))]
-        merge_cats = [det_cat_fct_merge(merge_cats[i], self.cat_dicts[2][i]) for i in range(len(self.thresholds))]
-
-        cat_scores = [det_cat_fct_compute(merge_cat, scores = ['POD', 'CSI', 'FAR', 'BIAS']) for merge_cat in merge_cats]
+        cat_scores = []
         # add threshold as key to the dicts
-        for thr, cat_score in zip(self.thresholds, cat_scores):
-            cat_score['threshold'] = thr
+        for i, lt in enumerate(self.leadtimes):
+            for j, thr in enumerate(self.thresholds):
+                cat_score = det_cat_fct_compute(self.cat_dicts[i,j], scores = ['POD', 'CSI', 'FAR', 'BIAS'])
+                cat_score['threshold'] = thr
+                cat_score['leadtime'] = lt
+                cat_scores.append(cat_score)
 
         cont_scores = [det_cont_fct_compute(cont_dict, scores = ['MSE', 'MAE']) for cont_dict in self.cont_dicts]
         # add lead time as key to the dicts
@@ -66,4 +66,3 @@ class Evaluator:
         self.cat_dicts = np.load('cat_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
         self.cont_dicts = np.load('cont_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
         self.n_verifies = 3 * np.load('n_sample_{}.npy'.format(self.nowcast_method))
-
