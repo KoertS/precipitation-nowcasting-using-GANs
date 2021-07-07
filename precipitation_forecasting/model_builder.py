@@ -569,6 +569,11 @@ class GAN(tf.keras.Model):
             x = minmax(x, norm_method = self.norm_method, convert_to_dbz = self.r_to_dbz, undo = True)
         if self.r_to_dbz:
             x = dbz_to_r(x)
+        if self.downscale256:
+            # Upsample the image using bilinear interpolation
+            x =  tf.convert_to_tensor([tf.image.resize(img, (768, 768)) for img in x])
+            # Original shape was 765x700, crop prediction so that it fits this
+            x = x[:,:,:-3, :-68]
         return x
     
     def model_step(self, batch, train = True):
