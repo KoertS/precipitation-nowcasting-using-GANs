@@ -73,14 +73,14 @@ if config.model == 'GAN':
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),  
-                 logger.ImageLogger(val_generator, persistent = True, train_data = False), logger.GradientLogger(generator)]
+                 logger.ImageLogger(validation_generator, persistent = True, train_data = False), logger.GradientLogger(generator)]
 else:
     model = build_generator(architecture=config.architecture, rnn_type=config.rnn_type, relu_alpha=0.2,
             x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
     opt = tf.keras.optimizers.Adam(learning_rate=config.lr_g)
     model.compile(loss='mse', metrics=['mse', 'mae'])
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True), 
-                 logger.ImageLogger(val_generator, persistent = True, train_data = False)]
+                 logger.ImageLogger(validation_generator, persistent = True, train_data = False)]
 
 history = model.fit(generator, validation_data = validation_generator, epochs = config.epochs,
                     callbacks = callbacks)
