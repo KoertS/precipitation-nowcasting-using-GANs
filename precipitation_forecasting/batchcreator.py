@@ -16,7 +16,7 @@ class DataGenerator(keras.utils.Sequence):
     def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
                  y_seq_size=24, shuffle=True, load_prep=False,
                 norm_method=None, crop_y=True, pad_x=True,
-                downscale256 = False, convert_to_dbz = False, y_is_rtcor = False):
+                downscale256 = False, convert_to_dbz = False, y_is_rtcor = False, load_with_pysteps=False):
         '''
         list_IDs: pair of input and target filenames
         batch_size: size of batch to generate
@@ -32,6 +32,8 @@ class DataGenerator(keras.utils.Sequence):
         pad_x: adds 3 empty rows to input data to make it divisible by 2
         downscale256: If true uses bilinear interpolation to downscale input and output to 256x256
         convert_to_dbz: If true the rain values (mm/h) will be transformed into dbz
+        y_is_rtcor: If true the target is real time radar instead of Aart's corrected radarset
+        load_with_pysteps: If true uses pysteps loading function (testing if this makes a difference)
         '''
         img_dim = (765, 700, 1)
         
@@ -70,16 +72,12 @@ class DataGenerator(keras.utils.Sequence):
         self.convert_to_dbz = convert_to_dbz
         
         self.y_is_rtcor = y_is_rtcor
-        
+        self.load_with_pysteps = load_with_pysteps
 
     def __len__(self):
         'Denotes the number of batches per epoch'
         return int(np.floor(len(self.list_IDs) / self.batch_size))
-    
-#     def __iter__(self):
-#         'Retrieves next batch. Allows the generator to be a iterator when using next(generator)'
-#         self.cur_idx += 1
-#         return self[self.cur_idx]
+
     
     def __getitem__(self, index):
         'Generate one batch of data'
@@ -105,18 +103,38 @@ class DataGenerator(keras.utils.Sequence):
         # Initialization
         X = np.empty((self.batch_size, *self.inp_shape), dtype = np.float32)
         y = np.empty((self.batch_size, *self.out_shape), dtype = np.float32)
+        
+        if not self.load_with_pysteps:
+            # Generate data
+            for i, IDs in enumerate(list_IDs_temp):
+                x_IDs, y_IDs = IDs
+                # Store input image(s)
+                for c in range(self.inp_shape[0]):
+                    X[i,c] = self.load_x(x_IDs[c])
 
-        # Generate data
+                # Store target image(s)
+                for c in range(self.out_shape[0]):
+                    y[i,c] = self.load_y(y_IDs[c])
+        else:
+            X, y = self.load_data_with_pysteps(list_IDs_temp)
+        X,y = self.prep_data(X,y)
+        return X, y
+    
+    def load_data_with_pysteps(self, list_IDs_temp):
+        X = np.empty((self.batch_size, 6, 765, 700, 1), dtype = np.float32)
+        y = np.empty((self.batch_size, 3, 765, 700, 1), dtype = np.float32)
         for i, IDs in enumerate(list_IDs_temp):
             x_IDs, y_IDs = IDs
-            # Store input image(s)
-            for c in range(self.inp_shape[0]):
-                X[i,c] = self.load_x(x_IDs[c])
-
-            # Store target image(s)
-            for c in range(self.out_shape[0]):
-                y[i,c] = self.load_y(y_IDs[c])
-     
+            
+            R, R_target, metadata = load_fns_pysteps(IDs)
+            R = np.expand_dims(R, axis = -1)
+            R_target = np.expand_dims(R_target, axis = -1)
+            
+            X[i] = np.nan_to_num(R)
+            y[i] = np.nan_to_num(R_target)
+        return X,y
+            
+    def prep_data(self, X, y):
         if self.norm_method == 'zscore':
             y = self.zscore(y)
         if self.norm_method == 'minmax':
@@ -134,7 +152,14 @@ class DataGenerator(keras.utils.Sequence):
             # First make the images square size
             X = self.pad_along_axis(X, axis=2, pad_size=3)
             X = self.pad_along_axis(X, axis=3, pad_size=68)
-            y = self.crop_center(y, cropx=384, cropy=384)
+            
+            if self.y_is_rtcor:
+                # First make the images square size
+                y = self.pad_along_axis(y, axis=2, pad_size=3)
+                y = self.pad_along_axis(y, axis=3, pad_size=68)
+            else:
+                y = self.crop_center(y, cropx=384, cropy=384)
+                
             X =  tf.convert_to_tensor([tf.image.resize(x, (256, 256)) for x in X])
             y =  tf.convert_to_tensor([tf.image.resize(y_i, (256, 256)) for y_i in y])
         return X, y
@@ -275,24 +300,6 @@ def minmax(x, norm_method='minmax', convert_to_dbz = False, undo = False):
             x = x*(MAX - MIN) + MIN           
     return x
 
-def undo_prep(x, in_0_01mmh = False):
-    '''
-    Convert the normalized dbz values back to unnormalized mm/h values
-    in_0_01mmh: If true convert the values back to 0.01mm/h (value 1 = 0.01mm/h). This is what the original data was like
-    '''
-    # First unnormalize
-    MAX = 55
-    x = x*(MAX - MIN) + MIN  
-    
-    # Convert dbz to r
-    x = dbz_to_r(x)
-    
-    
-    if in_0_01mmh:
-        x *= 100
-        
-    return x
-
 def r_to_dbz(r):
     '''
     Convert mm/h to dbz
@@ -307,7 +314,7 @@ def dbz_to_r(dbz):
     '''
     Convert dbz to mm/h
     '''
-    r = ((10**(dbz/10))/200)**(5/8)
+    r = ((10**(dbz/10)-1)/200)**(5/8)
     return r
 
 def tf_log10(x):
@@ -384,6 +391,9 @@ def get_filenames_xy(dt, x_size=6, y_size=1, y_interval = 5):
 
 from pysteps.io import archive, read_timeseries, get_method
 from pysteps.utils import conversion
+from datetime import datetime
+from pysteps.io import archive, read_timeseries, get_method
+from pysteps.utils import conversion
 def load_fns_pysteps(list_ID):
     '''
     Load radar images corresponding to list of filenames.
@@ -421,14 +431,13 @@ def load_fns_pysteps(list_ID):
   
     # Read the radar composites
     importer = get_method(importer_name, "importer") 
-    Z, _, metadata_R = read_timeseries(fns_inp, importer, **importer_kwargs)
+    Z, _, metadata = read_timeseries(fns_inp, importer, **importer_kwargs)
+    
+    # Convert to rain rate
+    R, metadata = conversion.to_rainrate(Z, metadata)
+
+    Z_target, _, metadata_target = read_timeseries(fns_target, importer, **importer_kwargs)
 
     # Convert to rain rate
-    R, metadata_R = conversion.to_rainrate(Z, metadata_R)
-
-    Z, _, metadata = read_timeseries(fns_target, importer, **importer_kwargs)
-
-    # Convert to rain rate
-    R_target, metadata = conversion.to_rainrate(Z, metadata)
-
-    return R, R_target, metadata_R
+    R_target, metadata_target = conversion.to_rainrate(Z_target, metadata_target)
+    return R, R_target, metadata
