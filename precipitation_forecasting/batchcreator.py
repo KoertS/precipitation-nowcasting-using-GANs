@@ -10,6 +10,11 @@ import h5py
 from netCDF4 import Dataset
 import config as conf
 
+from pysteps.io import archive, read_timeseries, get_method
+from pysteps.utils import conversion
+from datetime import datetime
+from pysteps.io import archive, read_timeseries, get_method
+from pysteps.utils import conversion
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
@@ -389,11 +394,7 @@ def get_filenames_xy(dt, x_size=6, y_size=1, y_interval = 5):
         ys.append(ts)
     return xs,ys
 
-from pysteps.io import archive, read_timeseries, get_method
-from pysteps.utils import conversion
-from datetime import datetime
-from pysteps.io import archive, read_timeseries, get_method
-from pysteps.utils import conversion
+
 def load_fns_pysteps(list_ID):
     '''
     Load radar images corresponding to list of filenames.
