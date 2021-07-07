@@ -34,10 +34,11 @@ run = wandb.init(project='precipitation-forecasting',
             'norm_method': 'minmax',
             'downscale256': True,
             'convert_to_dbz': True,
-            'load_prep': True,
+            'load_prep': False,
             'server':  'RU',
             'rec_with_mae': False,
-            'y_is_rtcor': True
+            'y_is_rtcor': True,
+            'load_with_pysteps': True
         })
 config = wandb.config
 
@@ -49,7 +50,8 @@ print(len(list_IDs))
 generator = DataGenerator(list_IDs, batch_size=config.batch_size,
                           x_seq_size=config.x_length, y_seq_size=config.y_length,
                           norm_method = config.norm_method, load_prep=config.load_prep,
-                          downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor)
+                          downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor,
+                         load_with_pysteps = config.load_with_pysteps)
 
 if config.val_data:
     val_IDs = np.load(config.val_data, allow_pickle = True)
@@ -60,7 +62,7 @@ if config.val_data:
                                      x_seq_size = config.x_length, y_seq_size = config.y_length,
                                      norm_method = config.norm_method, load_prep = config.load_prep,
                                      downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, 
-                                         y_is_rtcor = config.y_is_rtcor)
+                                         y_is_rtcor = config.y_is_rtcor, load_with_pysteps = config.load_with_pysteps)
 else:
     validation_generator = None
 # Initialize model
