@@ -3,7 +3,7 @@ import wandb
 import numpy as np
 from radarplot import plot_target_pred
 import matplotlib.pyplot as plt 
-from batchcreator import minmax
+from batchcreator import minmax, dbz_to_r, DataGenerator
 
 class ImageLogger(tf.keras.callbacks.Callback):
     '''
@@ -37,10 +37,11 @@ class ImageLogger(tf.keras.callbacks.Callback):
        
         predictions = self.model.predict(xs)
       
-        if self.model.norm_method and self.model.norm_method == 'minmax_tanh':
-            predictions = minmax(predictions, tanh=True, undo=True)   
-            ys = minmax(ys, tanh = True, undo=True)  
-           
+        # Undo the preprocessing
+        # Convert back to mm/h
+        predictions = self.model.undo_prep(predictions)
+        ys = self.model.undo_prep(ys)
+        
         plots = []
         for i in range(len(ys)):
             plot = plot_target_pred(ys[i], predictions[i])
@@ -50,6 +51,48 @@ class ImageLogger(tf.keras.callbacks.Callback):
                               for plot in plots]})
         plt.close('all')
 
+class ValidateLogger(tf.keras.callbacks.Callback):
+    '''
+    The validate logger calculates the mse of the model on the validation set.
+    The mse is calculated on the original data. The model predictions are upscaled back to 765, 700
+    The predictions are unnormalized and converted back to mm/h.
+    The two generators are not shuffled so if iterate over them they will sync up
+    '''
+    def __init__(self, generator):
+        self.generator = generator
+        
+        # Copy the validation generator but change it so that it loads the unpreprocessed data 
+        self.generator_unprep = DataGenerator(generator.list_IDs, batch_size=generator.batch_size, x_seq_size=generator.inp_shape[0], 
+                                       y_seq_size=generator.out_shape[0], norm_method=None, load_prep=False, downscale256 = False, 
+                                              convert_to_dbz = False, y_is_rtcor = generator.y_is_rtcor, shuffle=False, crop_y=False)
+        
+        self.epoch_freq = 10
+        
+        self.mse = tf.keras.losses.MeanSquaredError()
+        super(ValidateLogger, self).__init__()
+    
+    def validate_mse():
+        for (xs_prep, ys_prep), (_, ys) in zip(self.generator, self.generator_unprep):
+            # 0.01mm/h -> 1mm/h
+            ys = ys/100
+            # Undo normalization and convert dbz to r (mm/h)
+            ys_pred = self.model.undo_prep(self.model(xs))
+            # Upsample the image using bilinear interpolation
+            ys_pred =  tf.convert_to_tensor([tf.image.resize(y, (768, 768)) for y in y_pred])
+            # Original shape was 765x700, crop prediction so that it fits this
+            ys_pred = ys_pred[:,:,:-3, :-68]
+            
+            mse = self.mse(y_pred, ys).numpy()
+                        
+        wandb.log({'val_mse_mm/h': mse})    
+        
+    def on_epoch_end(self, logs, epoch):
+        # Validate every n epochs and at the last epoch
+        if epoch % self.epoch_freq == 0 or epoch == self.params.get('epochs', -1):
+            validate_mse()
+        
+            
+        
 class GradientLogger(tf.keras.callbacks.Callback):
     def __init__(self, generator):
         self.generator = generator
