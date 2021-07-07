@@ -84,3 +84,5 @@ else:
 
 history = model.fit(generator, validation_data = validation_generator, epochs = config.epochs,
                     callbacks = callbacks)
+
+model.generator.save('saved_models/generator_{}'.format(wandb.run.name.replace('-','_')))
