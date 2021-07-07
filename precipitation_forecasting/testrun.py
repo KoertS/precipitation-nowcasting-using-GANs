@@ -19,7 +19,7 @@ run = wandb.init(project='precipitation-forecasting',
             'epochs': 50,
             'lr_g': 0.0001,
             'lr_d': 0.0001,
-            'l_g': 0.006,
+            'l_adv': 0.006,
             'l_rec': 1,
             'g_cycles': 3,
             'label_smoothing': 0.2,
@@ -69,7 +69,7 @@ else:
 if config.model == 'GAN':
     model = GAN(rnn_type = config.rnn_type, x_length = config.x_length, y_length = config.y_length,
              architecture = config.architecture, g_cycles=config.g_cycles, label_smoothing = config.label_smoothing,
-                l_g = config.l_g, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
+                l_adv = config.l_adv, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),  
