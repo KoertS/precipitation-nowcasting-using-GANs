@@ -37,28 +37,30 @@ label_dir = config.dir_labels_heavy
 root = radar_dir + year
 files = sorted([name for path, subdirs, files in os.walk(root) for name in files])
 
-cluttermask = ~np.load('cluttermask.npy')
+#cluttermask = ~np.load('cluttermask.npy')
    
 path = config.dir_rtcor +  '2019/01/{}201901010000.h5'.format(config.prefix_rtcor)
 with h5py.File(path, 'r') as f:
     rain = f['image1']['image_data'][:]
     mask = (rain == 65535)
-nr_unmasked_pixels = (765*700)-np.sum(mask+~cluttermask)    
-def is_rainy(rdr):    
-    # Calculate gradien magnitudes
-    vgrad= np.gradient(rdr)
-    mag = np.sqrt(vgrad[0]**2 + vgrad[1]**2)
-    
-    # Ignore pixels that tend to contain clutter
-    rdr_clean = rdr * cluttermask
-    # Ignore rainy objects smaller than 15
-    cleaned = morphology.remove_small_objects(rdr>0, min_size=9, connectivity=8)   
-    rdr_clean = rdr_clean*cleaned
+nr_unmasked_pixels = (765*700)-np.sum(mask)#+~cluttermask)  
 
+def has_clutter(rdr):
+    # Calculate gradien magnitudes 
+    gx, gy = np.gradient(rdr)        
+    grad = np.hypot(gx,gy)
+    # Pixel is seen as abnormal if gradient is higher than 30
+    abnormal_pixels = np.sum(grad>30)
+    # Image is discared if it has more than 50 abnormal pixels
+    return abnormal_pixels > 50
+
+def is_rainy(rdr):    
     # Label as rainy
     # If not many high gradients (clutter) and avg > 0.01mm
-    avg_rain = np.sum(rdr_clean)/nr_unmasked_pixels
-    if len(np.argwhere(mag>500)) < 130 and avg_rain > 1:
+    avg_rain = np.sum(rdr)/nr_unmasked_pixels
+    
+    clutter = has_clutter(rdr)
+    if not clutter and avg_rain > 0.01:
         return True
     return False
 
@@ -78,6 +80,10 @@ def load_h5(path):
             # Sometimes 255 or other number (244) is used for the calibration
             # for out of image values, so also check the first pixel
             radar_img[radar_img == radar_img[0][0]] = 0
+            
+            # Convert the values to mm/h (from 0.01mm/5min)
+            radar_img = (radar_img/100)*12
+            radar_img = np.clip(radar_img, 0,100)
         except:
             print("Error: could not read image1 data, file {}".format(path))
     return radar_img
