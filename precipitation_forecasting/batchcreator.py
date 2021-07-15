@@ -13,8 +13,7 @@ import config as conf
 from pysteps.io import archive, read_timeseries, get_method
 from pysteps.utils import conversion
 from datetime import datetime
-from pysteps.io import archive, read_timeseries, get_method
-from pysteps.utils import conversion
+
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
@@ -124,20 +123,6 @@ class DataGenerator(keras.utils.Sequence):
             X, y = self.load_data_with_pysteps(list_IDs_temp)
         X,y = self.prep_data(X,y)
         return X, y
-    
-    def load_data_with_pysteps(self, list_IDs_temp):
-        X = np.empty((self.batch_size, 6, 765, 700, 1), dtype = np.float32)
-        y = np.empty((self.batch_size, 3, 765, 700, 1), dtype = np.float32)
-        for i, IDs in enumerate(list_IDs_temp):
-            x_IDs, y_IDs = IDs
-            
-            R, R_target, metadata = load_fns_pysteps(IDs)
-            R = np.expand_dims(R, axis = -1)
-            R_target = np.expand_dims(R_target, axis = -1)
-            
-            X[i] = np.nan_to_num(R)
-            y[i] = np.nan_to_num(R_target)
-        return X,y
             
     def prep_data(self, X, y):
         if self.norm_method == 'zscore':
@@ -169,10 +154,12 @@ class DataGenerator(keras.utils.Sequence):
             y =  tf.convert_to_tensor([tf.image.resize(y_i, (256, 256)) for y_i in y])
         return X, y
     
-    def load_h5(self, path):
+    def load_h5(self, path, convert_to_mmh = True):
         '''
         The orginial input images are stored in .h5 files. 
         This function loads them and converts them to numpy arrays
+        path: path to radar file
+        convert_to_mmh: the original data is in 0.01mm/5min. If convert_to_mmh, convert the data to be in 1mm/h
         '''
         x = None
         with h5py.File(path, 'r') as f:
@@ -189,11 +176,14 @@ class DataGenerator(keras.utils.Sequence):
                 x[x == 65535] = 0
                 # Expand dimensions from (w,h) to (w,h,c=1)
                 x = np.expand_dims(x, axis=-1)
+                
+                if convert_to_mmh:
+                    x = (x/100)*12
             except:
                 print("Error: could not read image1 data, file {}".format(path))
         return x
     
-    def load_nc(self, path, as_int=True):
+    def load_nc(self, path, as_int=False):
         '''
         The target images are stored as .nc files. 
         This function loads and converts the images to numpy arrays
@@ -206,7 +196,8 @@ class DataGenerator(keras.utils.Sequence):
                 
                 # apply mask:
                 radar_img = radar_img * ~mask
-                
+                # convert to mm/h (from mm/5min)
+                radar_img = radar_img*12
                 if as_int:
                     radar_img *=100
                     radar_img = radar_img.astype(int)
@@ -281,10 +272,9 @@ def minmax(x, norm_method='minmax', convert_to_dbz = False, undo = False):
     '''
     assert norm_method == 'minmax' or norm_method == 'minmax_tanh'
     
-    # pixel values are in 0.01mm
     # define max intensity as 100mm
     MIN = 0
-    MAX = 10000
+    MAX = 100
     
     if not undo:
         if convert_to_dbz:
@@ -309,9 +299,6 @@ def r_to_dbz(r):
     '''
     Convert mm/h to dbz
     '''
-    # Pixel values are in 0.01mm
-    # Convert r to be in mm/h not 0.01mm/h
-    r = r / 100
     # Convert to dBZ
     return 10 * tf_log10(200*r**(8/5)+1) 
 
