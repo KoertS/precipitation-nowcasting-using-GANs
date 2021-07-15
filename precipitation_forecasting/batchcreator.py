@@ -20,7 +20,7 @@ class DataGenerator(keras.utils.Sequence):
     def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
                  y_seq_size=24, shuffle=True, load_prep=False,
                 norm_method=None, crop_y=True, pad_x=True,
-                downscale256 = False, convert_to_dbz = False, y_is_rtcor = False, load_with_pysteps=False):
+                downscale256 = False, convert_to_dbz = False, y_is_rtcor = False):
         '''
         list_IDs: pair of input and target filenames
         batch_size: size of batch to generate
@@ -37,7 +37,6 @@ class DataGenerator(keras.utils.Sequence):
         downscale256: If true uses bilinear interpolation to downscale input and output to 256x256
         convert_to_dbz: If true the rain values (mm/h) will be transformed into dbz
         y_is_rtcor: If true the target is real time radar instead of Aart's corrected radarset
-        load_with_pysteps: If true uses pysteps loading function (testing if this makes a difference)
         '''
         img_dim = (765, 700, 1)
         
@@ -76,7 +75,7 @@ class DataGenerator(keras.utils.Sequence):
         self.convert_to_dbz = convert_to_dbz
         
         self.y_is_rtcor = y_is_rtcor
-        self.load_with_pysteps = load_with_pysteps
+
 
     def __len__(self):
         'Denotes the number of batches per epoch'
@@ -108,19 +107,17 @@ class DataGenerator(keras.utils.Sequence):
         X = np.empty((self.batch_size, *self.inp_shape), dtype = np.float32)
         y = np.empty((self.batch_size, *self.out_shape), dtype = np.float32)
         
-        if not self.load_with_pysteps:
-            # Generate data
-            for i, IDs in enumerate(list_IDs_temp):
-                x_IDs, y_IDs = IDs
-                # Store input image(s)
-                for c in range(self.inp_shape[0]):
-                    X[i,c] = self.load_x(x_IDs[c])
+        
+        # Generate data
+        for i, IDs in enumerate(list_IDs_temp):
+            x_IDs, y_IDs = IDs
+            # Store input image(s)
+            for c in range(self.inp_shape[0]):
+                X[i,c] = self.load_x(x_IDs[c])
 
-                # Store target image(s)
-                for c in range(self.out_shape[0]):
-                    y[i,c] = self.load_y(y_IDs[c])
-        else:
-            X, y = self.load_data_with_pysteps(list_IDs_temp)
+            # Store target image(s)
+            for c in range(self.out_shape[0]):
+                y[i,c] = self.load_y(y_IDs[c])
         X,y = self.prep_data(X,y)
         return X, y
             
@@ -232,8 +229,6 @@ class DataGenerator(keras.utils.Sequence):
             year = y_ID[:4]
             path = self.y_path + year + '/' + conf.prefix_aart + y_ID +'.nc'
             y = self.load_nc(path)
-
-
         return y
         
     def zscore(self, x):
