@@ -23,7 +23,7 @@ def uncrop_center(img, uncropx=700, uncropy=765):
                
     return np.pad(img, pad_width=npad, mode='constant', constant_values=0)
 
-def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
+def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None, vmin=None):
     '''
     Plot radar file on top of map.
     rdr: image file
@@ -90,6 +90,8 @@ def plot_on_map(rdr, ftype='.nc', res='l',colorbar=True, vmax=None, axis=None):
     xx, yy = mp(lon, lat)
 
     vmin=-0.00001    
+    if vmin:
+        vmin = vmin
     cmap = cm.viridis
     if axis:
         im = axis.imshow(mx, vmin = vmin, vmax=vmax, cmap=cmap, origin='upper', 
