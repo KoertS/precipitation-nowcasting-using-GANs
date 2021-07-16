@@ -13,6 +13,7 @@ from tensorflow.keras import backend
 from tensorflow.keras.constraints import Constraint
 from RepeatVector4D import RepeatVector4D
 
+import batchcreator
 from batchcreator import minmax, dbz_to_r
 
 # implementation of wasserstein loss
@@ -566,15 +567,7 @@ class GAN(tf.keras.Model):
         return adv_loss_frame, adv_loss_seq, g_loss_rec
     
     def undo_prep(self, x):
-        if self.norm_method:
-            x = minmax(x, norm_method = self.norm_method, convert_to_dbz = self.r_to_dbz, undo = True)
-        if self.r_to_dbz:
-            x = dbz_to_r(x)
-        if self.downscale256:
-            # Upsample the image using bilinear interpolation
-            x =  tf.convert_to_tensor([tf.image.resize(img, (768, 768)) for img in x])
-            # Original shape was 765x700, crop prediction so that it fits this
-            x = x[:,:,:-3, :-68]
+        x = batchcreator.undo_prep(x, norm_method=self.norm_method, r_to_dbz=self.r_to_dbz, downscale256=self.downscale256)
         return x
     
     def model_step(self, batch, train = True):
