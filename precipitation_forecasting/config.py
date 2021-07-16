@@ -1,4 +1,4 @@
-path_data = '/ceph/knmimo/' 
+path_data = '/ceph/knmimo/'
 # Change the above on KNMI server to: /nobackup_1/users/schreurs/project_GAN/
 
 path_project  = '~/Documents/KNMI_Internship_GANs/'
@@ -10,6 +10,10 @@ dir_aart = path_data + 'dataset_aart/'
 
 dir_rtcor_npy = path_data + 'dataset_radar_np/'
 dir_aart_npy = path_data + 'dataset_aart_np/'
+
+dir_prep = 'preprocessed/'
+dir_rtcor_prep = path_data + dir_prep + 'rtcor/'
+dir_aart_prep = path_data + dir_prep + 'aart/'
 
 dir_labels = path_data + 'rtcor_rain_labels/'
 dir_labels_heavy = path_data + 'rtcor_heavy_rain_labels/'
