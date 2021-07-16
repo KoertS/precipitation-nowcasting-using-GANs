@@ -40,7 +40,6 @@ class ImageLogger(tf.keras.callbacks.Callback):
       
         # Undo the preprocessing
         # Convert back to mm/h
-        undo_prep(x, norm_method='minmax', r_to_dbz=True, downscale256=True):
         predictions = batchcreator.undo_prep(predictions, norm_method = self.generator.norm_method, 
                                              r_to_dbz = self.generator.convert_to_dbz, downscale256 = self.generator.downscale256)
         ys = batchcreator.undo_prep(ys, norm_method = self.generator.norm_method, 
