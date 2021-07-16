@@ -24,7 +24,7 @@ run = wandb.init(project='precipitation-forecasting',
             'g_cycles': 3,
             'label_smoothing': 0.2,
             'x_length': 6,
-            'y_length': 1,
+            'y_length': 3,
             'rnn_type': 'GRU',
             'filter_no_rain': 'avg0.01mm',
             'train_data': 'train2015_2018_1y_30m.npy',
@@ -34,11 +34,10 @@ run = wandb.init(project='precipitation-forecasting',
             'norm_method': 'minmax',
             'downscale256': True,
             'convert_to_dbz': True,
-            'load_prep': False,
+            'load_prep': True,
             'server':  'RU',
             'rec_with_mae': False,
             'y_is_rtcor': True,
-            'load_with_pysteps': True
         })
 config = wandb.config
 
@@ -50,8 +49,7 @@ print(len(list_IDs))
 generator = DataGenerator(list_IDs, batch_size=config.batch_size,
                           x_seq_size=config.x_length, y_seq_size=config.y_length,
                           norm_method = config.norm_method, load_prep=config.load_prep,
-                          downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor,
-                         load_with_pysteps = config.load_with_pysteps)
+                          downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, y_is_rtcor = config.y_is_rtcor)
 
 if config.val_data:
     val_IDs = np.load(config.val_data, allow_pickle = True)
@@ -61,8 +59,8 @@ if config.val_data:
     validation_generator = DataGenerator(val_IDs, batch_size = config.batch_size,
                                      x_seq_size = config.x_length, y_seq_size = config.y_length,
                                      norm_method = config.norm_method, load_prep = config.load_prep,
-                                     downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz, 
-                                         y_is_rtcor = config.y_is_rtcor, load_with_pysteps = config.load_with_pysteps)
+                                     downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz,
+                                         y_is_rtcor = config.y_is_rtcor)
 else:
     validation_generator = None
 # Initialize model
@@ -72,14 +70,14 @@ if config.model == 'GAN':
                 l_adv = config.l_adv, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
-    callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),  
+    callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),
                  logger.ImageLogger(validation_generator, persistent = True, train_data = False), logger.GradientLogger(generator)]
 else:
     model = build_generator(architecture=config.architecture, rnn_type=config.rnn_type, relu_alpha=0.2,
             x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
     opt = tf.keras.optimizers.Adam(learning_rate=config.lr_g)
     model.compile(loss='mse', metrics=['mse', 'mae'])
-    callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True), 
+    callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),
                  logger.ImageLogger(validation_generator, persistent = True, train_data = False)]
 
 history = model.fit(generator, validation_data = validation_generator, epochs = config.epochs,
