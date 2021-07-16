@@ -384,12 +384,12 @@ class GAN(tf.keras.Model):
                           label_smoothing correspond to heavier smoothing
         norm_method: which normalization method was used. 
                      Can be none or minmax_tanh where data scaled to be between -1 and 1
-        r_to_dbz: If true the data values are in dbz not in r (mm/h)
         wgan: Option to use wasserstein loss (Not fully implemented yet)
         downscale256: if true than the images are downscaled to 256x256 by using bilinear interpolation
         rec_with_mae: if true the reconstruction loss is MSE+MAE if false, rec it consists of only the MSE
         batch_norm: if true batch normalization is applied after each convolution(/rnn) block
         drop_out: if true adds dropout layer after each conv block in the Discriminator (dropout rate of 0.2)
+        r_to_dbz: If true the data values are in dbz not in r (mm/h)
         '''
         super(GAN, self).__init__()      
 
@@ -416,6 +416,7 @@ class GAN(tf.keras.Model):
         self.r_to_dbz = r_to_dbz
         self.wgan = wgan
         self.rec_with_mae = rec_with_mae
+        self.downscale256 = downscale256
         
     def compile(self, lr_g=0.0001, lr_d = 0.0001):
         super(GAN, self).compile()
