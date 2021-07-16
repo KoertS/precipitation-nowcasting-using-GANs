@@ -4,6 +4,7 @@ import numpy as np
 from radarplot import plot_target_pred
 import matplotlib.pyplot as plt 
 from batchcreator import minmax, dbz_to_r, DataGenerator
+import batchcreator
 
 class ImageLogger(tf.keras.callbacks.Callback):
     '''
@@ -39,8 +40,11 @@ class ImageLogger(tf.keras.callbacks.Callback):
       
         # Undo the preprocessing
         # Convert back to mm/h
-        predictions = self.model.undo_prep(predictions)
-        ys = self.model.undo_prep(ys)
+        undo_prep(x, norm_method='minmax', r_to_dbz=True, downscale256=True):
+        predictions = batchcreator.undo_prep(predictions, norm_method = self.generator.norm_method, 
+                                             r_to_dbz = self.generator.convert_to_dbz, downscale256 = self.generator.downscale256)
+        ys = batchcreator.undo_prep(ys, norm_method = self.generator.norm_method, 
+                                             r_to_dbz = self.generator.convert_to_dbz, downscale256 = self.generator.downscale256)
         
         plots = []
         for i in range(len(ys)):

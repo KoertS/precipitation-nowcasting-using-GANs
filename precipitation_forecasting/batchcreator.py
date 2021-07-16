@@ -48,9 +48,11 @@ class DataGenerator(keras.utils.Sequence):
             self.y_path = conf.dir_aart_prep
             # If from npy than the image has been preprocessed
             img_dim = (256, 256, 1)
-            # No need for further preprocessing:
-            norm_method = None
-            crop_y = pad_x = downscale256 = convert_to_dbz = False
+            # The following code ensures that hyperparameters of 
+            # the generator are equal to those used during preprocessing:
+            norm_method = 'minmax'
+            downscale256 = True
+            convert_to_dbz = True
         self.inp_shape = (x_seq_size, *img_dim)
         self.out_shape = (y_seq_size, *img_dim)
         
@@ -73,7 +75,6 @@ class DataGenerator(keras.utils.Sequence):
         if downscale256:
             self.crop_y = self.pad_x = False
         self.convert_to_dbz = convert_to_dbz
-        
         self.y_is_rtcor = y_is_rtcor
 
 
@@ -118,7 +119,8 @@ class DataGenerator(keras.utils.Sequence):
             # Store target image(s)
             for c in range(self.out_shape[0]):
                 y[i,c] = self.load_y(y_IDs[c])
-        X,y = self.prep_data(X,y)
+        if not self.load_prep:
+            X,y = self.prep_data(X,y)
         return X, y
             
     def prep_data(self, X, y):
@@ -288,6 +290,18 @@ def minmax(x, norm_method='minmax', convert_to_dbz = False, undo = False):
             x = x*(MAX/2 - MIN) + MIN + MAX/2
         else:
             x = x*(MAX - MIN) + MIN           
+    return x
+
+def undo_prep(x, norm_method='minmax', r_to_dbz=True, downscale256=True):
+    if norm_method:
+        x = minmax(x, norm_method = norm_method, convert_to_dbz = r_to_dbz, undo = True)
+    if r_to_dbz:
+        x = dbz_to_r(x)
+    if downscale256:
+        # Upsample the image using bilinear interpolation
+        x =  tf.convert_to_tensor([tf.image.resize(img, (768, 768)) for img in x])
+        # Original shape was 765x700, crop prediction so that it fits this
+        x = x[:,:,:-3, :-68]
     return x
 
 def r_to_dbz(r):
