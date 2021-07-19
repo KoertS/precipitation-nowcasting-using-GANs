@@ -18,7 +18,7 @@ from datetime import datetime
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, list_IDs, batch_size=32, x_seq_size=6, 
-                 y_seq_size=24, shuffle=True, load_prep=False,
+                 y_seq_size=3, shuffle=True, load_prep=False,
                 norm_method=None, crop_y=True, pad_x=True,
                 downscale256 = False, convert_to_dbz = False, y_is_rtcor = False):
         '''
