@@ -562,8 +562,6 @@ class GAN(tf.keras.Model):
             g_loss_adv = adv_loss_frame + adv_loss_seq
             g_loss_rec = self.loss_rec(ys, generated_images, self.rec_with_mae)
             g_loss =  self.l_adv * g_loss_adv  + self.l_rec * g_loss_rec 
-            
-            
         return adv_loss_frame, adv_loss_seq, g_loss_rec
     
     def undo_prep(self, x):
