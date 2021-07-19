@@ -84,9 +84,7 @@ class ValidateLogger(tf.keras.callbacks.Callback):
             ys_pred =  tf.convert_to_tensor([tf.image.resize(y, (768, 768)) for y in y_pred])
             # Original shape was 765x700, crop prediction so that it fits this
             ys_pred = ys_pred[:,:,:-3, :-68]
-            
-            mse = self.mse(y_pred, ys).numpy()
-                        
+            mse = self.mse(y_pred, ys).numpy()               
         wandb.log({'val_mse_mm/h': mse})    
         
     def on_epoch_end(self, logs, epoch):
