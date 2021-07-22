@@ -1,7 +1,7 @@
 import tensorflow as tf
 import wandb
 import numpy as np
-from radarplot import plot_target_pred
+from plotter import plot_target_pred
 import matplotlib.pyplot as plt 
 from batchcreator import minmax, dbz_to_r, DataGenerator
 import batchcreator
