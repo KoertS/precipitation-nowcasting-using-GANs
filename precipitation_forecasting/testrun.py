@@ -41,7 +41,7 @@ run = wandb.init(project='precipitation-forecasting',
         })
 config = wandb.config
 
-model_path = 'saved_models/generator_{}'.format(wandb.run.name.replace('-','_')
+model_path = 'saved_models/model_{}'.format(wandb.run.name.replace('-','_')
 # Create generator for training
 list_IDs = np.load(config.train_data, allow_pickle = True)
 print('Samples in training set:')
