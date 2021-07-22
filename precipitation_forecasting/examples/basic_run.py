@@ -5,6 +5,7 @@ import numpy as np
 # Add parent directory to system path in order to import custom modules
 import sys
 sys.path.append('../')
+sys.path.append('../../')
 from model_builder import GAN
 from batchcreator import DataGenerator, get_list_IDs
 
