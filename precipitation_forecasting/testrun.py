@@ -41,6 +41,7 @@ run = wandb.init(project='precipitation-forecasting',
         })
 config = wandb.config
 
+model_path = 'saved_models/generator_{}'.format(wandb.run.name.replace('-','_')
 # Create generator for training
 list_IDs = np.load(config.train_data, allow_pickle = True)
 print('Samples in training set:')
@@ -63,6 +64,8 @@ if config.val_data:
                                          y_is_rtcor = config.y_is_rtcor)
 else:
     validation_generator = None
+    
+
 # Initialize model
 if config.model == 'GAN':
     model = GAN(rnn_type = config.rnn_type, x_length = config.x_length, y_length = config.y_length,
@@ -70,24 +73,24 @@ if config.model == 'GAN':
                 l_adv = config.l_adv, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
+    
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_rec_loss', patience=10, mode='min')
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_rec_loss', save_best_only=True, mode='min')
+    
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),
-                 logger.ImageLogger(validation_generator, persistent = True, train_data = False), logger.GradientLogger(generator)]
+                 logger.ImageLogger(validation_generator, persistent = True, train_data = False), logger.GradientLogger(generator),
+                early_stopping, model_checkpoint]
 else:
     model = build_generator(architecture=config.architecture, rnn_type=config.rnn_type, relu_alpha=0.2,
             x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
     opt = tf.keras.optimizers.Adam(learning_rate=config.lr_g)
     model.compile(loss='mse', metrics=['mse', 'mae'])
+    
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mse', patience=10, mode='min')
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_mse', save_best_only=True, mode='min')                                           
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),
-                 logger.ImageLogger(validation_generator, persistent = True, train_data = False)]
+                 logger.ImageLogger(validation_generator, persistent = True, train_data = False),
+                early_stopping, model_checkpoint]
 
 history = model.fit(generator, validation_data = validation_generator, epochs = config.epochs,
                     callbacks = callbacks, workers=8)
-
-# save the generator model
-print('Saving the generator model')
-if config.model == 'GAN':
-    model_gen = model.generator
-else:
-    model_gen = model
-model_gen.save('saved_models/generator_{}'.format(wandb.run.name.replace('-','_')))
-
