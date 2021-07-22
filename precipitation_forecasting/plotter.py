@@ -159,3 +159,57 @@ def pysteps_colorbar(im, cax=None):
     if ptype == "intensity":
         cbar.ax.set_title(units, fontsize=10)
         cbar.set_label("Precipitation intensity")
+
+def performance_diagram(cat_scores, legend=True):
+    '''
+    Plots a performance diagram. 
+    The performance diagram visualizes multiple categorical metrics inside 1 figure.
+    The y-axis show the POD (or recall) and the x-axis is 1-FAR (or precision). 
+    Lines are drawn to indicate the CSI and the bias. 
+    cat_scores: categorical scores calculated with the Evaluator class
+    legend: shows a legend when true
+    '''
+    # plt.figure(figsize=(6,6))
+    colors_lt = {30:'red', 60:'blue', 90:'black'}
+    marker_size = 100
+    for cat_score in cat_scores:
+        if cat_score['nowcast_method'] == 'S-PROG':
+            marker = '^'
+        elif cat_score['nowcast_method'] == 'GAN':
+            marker = 'o'
+        plt.scatter(1-cat_score['FAR'], cat_score['POD'], 
+                    label='{}, leadtime = {}'.format(cat_score['nowcast_method'],cat_score['leadtime']),
+                    marker=marker, c=colors_lt[cat_score['leadtime']], s = marker_size)
+    
+    # Plot bias lines
+    biases = [0.3, 0.5, 0.8, 1, 1.3, 1.5, 2, 3, 5, 10]
+    for i in range(len(biases)):
+        bias = biases[i]
+        label = ""
+        if i == 0:
+            label = "Bias frequency"
+        plt.plot([0, 1], [0, bias], 'k--', label=label, lw = 1, dashes=(5, 10))
+        if bias <= 1:
+            plt.text(1, bias, "%2.1f" % (bias))
+        else:
+            plt.text(1.0/bias, 1, "%2.1f" % (bias))
+            
+    # Plot threat score lines
+    threats = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    for i in range(len(threats)):
+        threat = threats[i]
+        x = np.linspace(threat, 1, 100)
+        label = ""
+        if i == 0:
+            label = "Threat score"
+        y = 1.0 / (1 + 1.0/threat - 1.0 / x)
+        plt.plot(x, y, 'k-', label=label, lw = 1)
+        xx = 2.0 / (1 + 1.0/threat)
+        #plt.text(xx, xx, str(threat))
+        plt.text(x[56], y[56], str(threat))
+    plt.xlabel("Success ratio (1 - FAR)")
+    plt.ylabel("Probability of detection")
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    if legend:
+        plt.legend(bbox_to_anchor=(1.05, 1))
