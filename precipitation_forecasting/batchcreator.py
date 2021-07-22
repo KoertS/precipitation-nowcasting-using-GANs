@@ -428,13 +428,13 @@ def load_fns_pysteps(list_ID):
   
     # Read the radar composites
     importer = get_method(importer_name, "importer") 
-    Z, _, metadata = read_timeseries(fns_inp, importer, **importer_kwargs)
+    R, _, metadata = read_timeseries(fns_inp, importer, **importer_kwargs)
+
+
+    R_target, _, metadata_target = read_timeseries(fns_target, importer, **importer_kwargs)
     
-    # Convert to rain rate
-    R, metadata = conversion.to_rainrate(Z, metadata)
+    # Convert from mm/5min to mm/h
+    R *= 12
+    R_target *=12
 
-    Z_target, _, metadata_target = read_timeseries(fns_target, importer, **importer_kwargs)
-
-    # Convert to rain rate
-    R_target, metadata_target = conversion.to_rainrate(Z_target, metadata_target)
     return R, R_target, metadata
