@@ -13,7 +13,7 @@ class Evaluator:
     leadtimes: the leadtimes of the predictions
     save_after_n_sample: if higher than 0, the evaluator will save its dictionary after it has seen n samples. 
     '''
-    def __init__(self, nowcast_method = 'S-prog', thresholds = [0.05, 0.5, 5, 10, 30], leadtimes = [30,60,90], save_after_n_samples = 0):
+    def __init__(self, nowcast_method = 'S-PROG', thresholds = [0.5, 5, 10, 30], leadtimes = [30,60,90], save_after_n_samples = 0):
         self.nowcast_method = nowcast_method
     
         ## Create dictionaries to compute the model errors
@@ -38,7 +38,7 @@ class Evaluator:
         self.n_verifies +=1
         # verify is called for each lead time
         n_samples = self.n_verifies/len(self.leadtimes)
-        if n_samples % self.save_after_n_samples == 0 and self.save_after_n_samples > 0:
+        if  self.save_after_n_samples > 0 and n_samples % self.save_after_n_samples == 0:
             self.save_accum_scores(n_samples)
 
     def get_scores(self):
@@ -58,11 +58,11 @@ class Evaluator:
         return cat_scores, cont_scores
 
     def save_accum_scores(self, n_samples):
-        np.save('cat_dicts_{}'.format(self.nowcast_method), self.cat_dicts)
-        np.save('cont_dicts_{}'.format(self.nowcast_method), self.cont_dicts)
-        np.save('n_sample_{}'.format(self.nowcast_method), n_samples)
+        np.save('results/cat_dicts_{}'.format(self.nowcast_method), self.cat_dicts)
+        np.save('results/cont_dicts_{}'.format(self.nowcast_method), self.cont_dicts)
+        np.save('results/n_sample_{}'.format(self.nowcast_method), n_samples)
 
     def load_accum_scores(self):
-        self.cat_dicts = np.load('cat_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
-        self.cont_dicts = np.load('cont_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
-        self.n_verifies = 3 * np.load('n_sample_{}.npy'.format(self.nowcast_method))
+        self.cat_dicts = np.load('results/cat_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
+        self.cont_dicts = np.load('results/cont_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
+        self.n_verifies = 3 * np.load('results/n_sample_{}.npy'.format(self.nowcast_method))
