@@ -16,9 +16,9 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 run = wandb.init(project='precipitation-forecasting',
             config={
             'batch_size' : 32,
-            'epochs': 50,
-            'lr_g': 0.0001,
-            'lr_d': 0.0001,
+            'epochs': 10,
+            'lr_g': 0.00005,
+            'lr_d': 0.00005,
             'l_adv': 0.006,
             'l_rec': 1,
             'g_cycles': 3,
@@ -27,8 +27,8 @@ run = wandb.init(project='precipitation-forecasting',
             'y_length': 3,
             'rnn_type': 'GRU',
             'filter_no_rain': 'avg0.01mm',
-            'train_data': 'train2015_2018_1y_30m.npy',
-            'val_data': 'val2019_1y_30m.npy',
+            'train_data': 'datasets/train2008_2018_3y_30m.npy',
+            'val_data': 'datasets/val2019_3y_30m.npy',
             'architecture': 'AENN',
             'model': 'GAN',
             'norm_method': 'minmax',
@@ -81,6 +81,13 @@ else:
                  logger.ImageLogger(validation_generator, persistent = True, train_data = False)]
 
 history = model.fit(generator, validation_data = validation_generator, epochs = config.epochs,
-                    callbacks = callbacks)
+                    callbacks = callbacks, workers=8)
 
-model.generator.save('saved_models/generator_{}'.format(wandb.run.name.replace('-','_')))
+# save the generator model
+print('Saving the generator model')
+if config.model == 'GAN':
+    model_gen = model.generator
+else:
+    model_gen = model
+model_gen.save('saved_models/generator_{}'.format(wandb.run.name.replace('-','_')))
+
