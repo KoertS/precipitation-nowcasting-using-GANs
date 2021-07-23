@@ -4,6 +4,7 @@ import numpy as np
 from batchcreator import DataGenerator, undo_prep
 from model_builder import GAN
 import tensorflow as tf
+from tqdm import tqdm
 
 class Evaluator:
     '''
