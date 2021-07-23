@@ -70,7 +70,14 @@ class Evaluator:
         self.n_verifies = 3 * np.load('results/n_sample_{}.npy'.format(self.nowcast_method))
        
     
-def validate_model(model_path='saved_models/generator_pious_meadow_514', dataset='datasets/val2019_3y_30m.npy'):
+def validate_model(model_path='saved_models/generator_pious_meadow_514', on_test_set = False):
+    if not on_test_set:
+        dataset = 'datasets/val2019_3y_30m.npy'
+        data_name = 'val'
+    else:
+        dataset = 'datasets/test2020_3y_30m.npy'
+        data_name = 'test'
+        
     # First load the data 
     list_IDs = np.load(dataset, allow_pickle = True)
     
@@ -95,7 +102,8 @@ def validate_model(model_path='saved_models/generator_pious_meadow_514', dataset
     model_name = model_path.replace('saved_models/','')
     
     # Init evaluator object to store metrics
-    evaluator = Evaluator(save_after_n_samples = 1, nowcast_method = model_name)
+    save_as = model_name + '_' + data_name
+    evaluator = Evaluator(save_after_n_samples = 1, nowcast_method = save_as)
 
     # zip the two generators so that the preprocessed X matches the target Y data
     for (xs_prep, ys_prep), (_, ys) in tqdm(zip(gen, cp_gen)):
