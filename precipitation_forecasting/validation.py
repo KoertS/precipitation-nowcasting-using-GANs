@@ -1,7 +1,9 @@
 from pysteps.verification.detcatscores import det_cat_fct_init, det_cat_fct_accum, det_cat_fct_compute, det_cat_fct_merge
 from pysteps.verification.detcontscores import det_cont_fct_init, det_cont_fct_accum, det_cont_fct_compute
 import numpy as np
-
+from batchcreator import DataGenerator, undo_prep
+from model_builder import GAN
+import tensorflow as tf
 
 class Evaluator:
     '''
@@ -66,3 +68,46 @@ class Evaluator:
         self.cat_dicts = np.load('results/cat_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
         self.cont_dicts = np.load('results/cont_dicts_{}.npy'.format(self.nowcast_method), allow_pickle=True)
         self.n_verifies = 3 * np.load('results/n_sample_{}.npy'.format(self.nowcast_method))
+       
+    
+def validate_model(model_path='saved_models/generator_pious_meadow_514', dataset='datasets/val2019_3y_30m.npy'):
+    # First load the data 
+    list_IDs = np.load(dataset, allow_pickle = True)
+    
+    norm_method = 'minmax'
+    downscale256 = True
+    convert_to_dbz = True
+    y_is_rtcor = True
+    
+    # Create generators:
+    # Create generator to load preprocessed input data
+    gen = DataGenerator(list_IDs, batch_size=1, x_seq_size=6, 
+                                           y_seq_size=3, norm_method = norm_method, load_prep=True,
+                             downscale256 = downscale256, convert_to_dbz = convert_to_dbz, 
+                                  y_is_rtcor = y_is_rtcor, shuffle=False)
+    # Create a generator that loads the original target data
+    cp_gen = DataGenerator(gen.list_IDs, batch_size=gen.batch_size, x_seq_size=gen.inp_shape[0], 
+                                           y_seq_size=gen.out_shape[0], norm_method=None, load_prep=False,
+                             downscale256 = False, convert_to_dbz = False, 
+                                  y_is_rtcor = gen.y_is_rtcor, shuffle=False, crop_y=False)
+    # Load the model 
+    model = tf.saved_model.load(model_path)
+    model_name = model_path.replace('saved_models/','')
+    
+    # Init evaluator object to store metrics
+    evaluator = Evaluator(save_after_n_samples = 1, nowcast_method = model_name)
+
+    # zip the two generators so that the preprocessed X matches the target Y data
+    for (xs_prep, ys_prep), (_, ys) in tqdm(zip(gen, cp_gen)):
+
+        ys_pred = model.predict(xs_prep)        
+        ys_pred = undo_prep(ys_pred, norm_method = norm_method, r_to_dbz=convert_to_dbz, 
+                            downscale256 = downscale256)
+
+        for y_pred, y_target in zip(ys_pred, ys):
+            leadtimes = [30, 60, 90]
+            for i, leadtime in enumerate(leadtimes):
+                R_forecast = np.array(y_pred[i])
+                R_target = np.array(y_target[i])
+                evaluator.verify(R_target, R_forecast, leadtime=leadtime)
+
