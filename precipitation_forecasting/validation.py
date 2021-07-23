@@ -71,7 +71,7 @@ class Evaluator:
         self.n_verifies = 3 * np.load('results/n_sample_{}.npy'.format(self.nowcast_method))
        
     
-def validate_model(model_path='saved_models/generator_pious_meadow_514', on_test_set = False):
+def validate_model(model, run_name, on_test_set = False):
     if not on_test_set:
         dataset = 'datasets/val2019_3y_30m.npy'
         data_name = 'val'
@@ -98,16 +98,13 @@ def validate_model(model_path='saved_models/generator_pious_meadow_514', on_test
                                            y_seq_size=gen.out_shape[0], norm_method=None, load_prep=False,
                              downscale256 = False, convert_to_dbz = False, 
                                   y_is_rtcor = gen.y_is_rtcor, shuffle=False, crop_y=False)
-    # Load the model 
-    model = tf.saved_model.load(model_path)
-    model_name = model_path.replace('saved_models/','')
-    
+
     # Init evaluator object to store metrics
-    save_as = model_name + '_' + data_name
+    save_as = run_name + '_' + data_name
     evaluator = Evaluator(save_after_n_samples = 1, nowcast_method = save_as)
 
     # zip the two generators so that the preprocessed X matches the target Y data
-    for (xs_prep, ys_prep), (_, ys) in tqdm(zip(gen, cp_gen)):
+    for (xs_prep, _), (_, ys) in tqdm(zip(gen, cp_gen)):
 
         ys_pred = model.predict(xs_prep)        
         ys_pred = undo_prep(ys_pred, norm_method = norm_method, r_to_dbz=convert_to_dbz, 
