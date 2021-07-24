@@ -16,10 +16,10 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 run = wandb.init(project='precipitation-forecasting',
             config={
             'batch_size' : 32,
-            'epochs': 10,
-            'lr_g': 0.00005,
-            'lr_d': 0.00005,
-            'l_adv': 0.006,
+            'epochs': 30,
+            'lr_g': 0.0001,
+            'lr_d': 0.0001,
+            'l_adv': 0.003,
             'l_rec': 1,
             'g_cycles': 3,
             'label_smoothing': 0.2,
@@ -27,8 +27,8 @@ run = wandb.init(project='precipitation-forecasting',
             'y_length': 3,
             'rnn_type': 'GRU',
             'filter_no_rain': 'avg0.01mm',
-            'train_data': 'datasets/train2008_2018_3y_30m.npy',
-            'val_data': 'datasets/val2019_3y_30m.npy',
+            'train_data': 'datasets/train_randomsplit.npy',
+            'val_data': 'datasets/val_randomsplit.npy',
             'architecture': 'AENN',
             'model': 'GAN',
             'norm_method': 'minmax',
@@ -41,7 +41,8 @@ run = wandb.init(project='precipitation-forecasting',
         })
 config = wandb.config
 
-model_path = 'saved_models/model_{}'.format(wandb.run.name.replace('-','_')
+model_path = 'saved_models/model_{}'.format(wandb.run.name.replace('-','_'))
+
 # Create generator for training
 list_IDs = np.load(config.train_data, allow_pickle = True)
 print('Samples in training set:')
@@ -61,10 +62,10 @@ if config.val_data:
                                      x_seq_size = config.x_length, y_seq_size = config.y_length,
                                      norm_method = config.norm_method, load_prep = config.load_prep,
                                      downscale256 = config.downscale256, convert_to_dbz = config.convert_to_dbz,
-                                         y_is_rtcor = config.y_is_rtcor)
+                                         y_is_rtcor = config.y_is_rtcor, shuffle=False)
 else:
     validation_generator = None
-    
+
 
 # Initialize model
 if config.model == 'GAN':
@@ -73,10 +74,10 @@ if config.model == 'GAN':
                 l_adv = config.l_adv, l_rec = config.l_rec, norm_method = config.norm_method, downscale256 = config.downscale256,
                rec_with_mae = config.rec_with_mae)
     model.compile(lr_g = config.lr_g, lr_d = config.lr_d)
-    
+
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_rec_loss', patience=10, mode='min')
     model_checkpoint = tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_rec_loss', save_best_only=True, mode='min')
-    
+
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),
                  logger.ImageLogger(validation_generator, persistent = True, train_data = False), logger.GradientLogger(generator),
                 early_stopping, model_checkpoint]
@@ -85,9 +86,9 @@ else:
             x_length = config.x_length, y_length = config.y_length, norm_method = config.norm_method, downscale256 = config.downscale256)
     opt = tf.keras.optimizers.Adam(learning_rate=config.lr_g)
     model.compile(loss='mse', metrics=['mse', 'mae'])
-    
+
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mse', patience=10, mode='min')
-    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_mse', save_best_only=True, mode='min')                                           
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(model_path, monitor='val_mse', save_best_only=True, mode='min')
     callbacks = [WandbCallback(), logger.ImageLogger(generator, persistent = True),
                  logger.ImageLogger(validation_generator, persistent = True, train_data = False),
                 early_stopping, model_checkpoint]
