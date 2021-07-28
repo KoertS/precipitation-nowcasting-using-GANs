@@ -174,9 +174,11 @@ def performance_diagram(cat_scores, legend=True):
     marker_size = 100
     for cat_score in cat_scores:
         if cat_score['nowcast_method'] == 'S-PROG':
-            marker = '^'
+            marker = '^' # triangle
         elif cat_score['nowcast_method'] == 'GAN':
-            marker = 'o'
+            marker = 'o' # circle
+        elif cat_score['nowcast_method'] == 'NAG':
+            marker = 's' # square
         plt.scatter(1-cat_score['FAR'], cat_score['POD'], 
                     label='{}, leadtime = {}'.format(cat_score['nowcast_method'],cat_score['leadtime']),
                     marker=marker, c=colors_lt[cat_score['leadtime']], s = marker_size)

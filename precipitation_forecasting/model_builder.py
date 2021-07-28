@@ -515,7 +515,13 @@ class GAN(tf.keras.Model):
 
         # Combine them with real images
         combined_images = tf.concat([generated_images, ys], axis=0)
-
+        
+        # concatenate input and predictions in feature dimensions
+        # D then looks at the whole sequence (cGAN)
+        seq_pred = tf.concat([xs, generated_images], axis=1)
+        seq_real = tf.concat([xs, ys], axis=1)
+        combined_sequences = tf.concat([seq_pred, seq_real], axis=0)
+        
         # Assemble labels discriminating fake from real images
         labels = tf.concat(
             [tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0
@@ -526,10 +532,9 @@ class GAN(tf.keras.Model):
         
         # Train the sequence discriminator
         if self.y_length > 1:
-            d_loss_seq = self.train_disc_seq(combined_images, labels, train)
+            d_loss_seq = self.train_disc_seq(combined_sequences, labels, train)
         else:
             d_loss_seq = d_loss_frame
-        
         return d_loss_frame, d_loss_seq
 
     def train_generator(self, xs, ys, batch_size, train = True):
