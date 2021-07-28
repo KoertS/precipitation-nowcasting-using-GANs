@@ -405,7 +405,7 @@ class GAN(tf.keras.Model):
                                                  downscale256 = downscale256, batch_norm = batch_norm, drop_out = drop_out)
         self.y_length = y_length
         if y_length > 1:
-            self.discriminator_seq = build_discriminator(y_length=y_length, 
+            self.discriminator_seq = build_discriminator(y_length=x_length+y_length, 
                                                      relu_alpha=relu_alpha,
                                                     architecture=architecture, wgan = wgan, 
                                                      downscale256 = downscale256, batch_norm = batch_norm, drop_out = drop_out)
