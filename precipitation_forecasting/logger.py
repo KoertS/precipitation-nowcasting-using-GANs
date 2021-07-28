@@ -113,7 +113,8 @@ class GradientLogger(tf.keras.callbacks.Callback):
             adv_loss_frame = self.model.train_disc_frame(generated_images, misleading_labels, train = False)
             
             if self.model.y_length > 1:
-                adv_loss_seq = self.model.train_disc_seq(generated_images, misleading_labels, train = False)
+                seq_pred = tf.concat([xs, generated_images], axis=1)
+                adv_loss_seq = self.model.train_disc_seq(seq_pred, misleading_labels, train = False)
             else:
                 adv_loss_seq = adv_loss_frame
             g_loss_adv = adv_loss_frame + adv_loss_seq
