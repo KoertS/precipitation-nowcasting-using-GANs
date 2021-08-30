@@ -13,7 +13,7 @@ In order to run the code on your own machine, you need to specify a few things
 
 ## Config
 
-In the [config.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/config.py) change the path to your data (path_data) and to your project (path_project) to match you machine. Furthermore the real-time dataset can have different names (rtcor or RAC). Check your data to see if the prefix of your data matches the one stated in the config file (prefix_rtcor).
+In the [config.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/config.py) change the path to your data (path_data) and to your project (path_project) to match your system. Furthermore the real-time dataset can have different names (rtcor or RAC). Check your data to see if the prefix of your data matches the one stated in the config file (prefix_rtcor).
 
 
 # GANs on Precipitation Data
