@@ -292,14 +292,14 @@ def minmax(x, norm_method='minmax', convert_to_dbz = False, undo = False):
             x = x*(MAX - MIN) + MIN           
     return x
 
-def undo_prep(x, norm_method='minmax', r_to_dbz=True, downscale256=True):
+def undo_prep(x, norm_method='minmax', r_to_dbz=True, downscale256=True, resize_method = tf.image.ResizeMethod.BILINEAR):
     if norm_method:
         x = minmax(x, norm_method = norm_method, convert_to_dbz = r_to_dbz, undo = True)
     if r_to_dbz:
         x = dbz_to_r(x)
     if downscale256:
         # Upsample the image using bilinear interpolation
-        x =  tf.convert_to_tensor([tf.image.resize(img, (768, 768)) for img in x])
+        x =  tf.convert_to_tensor([tf.image.resize(img, (768, 768), method=resize_method) for img in x])
         # Original shape was 765x700, crop prediction so that it fits this
         x = x[:,:,:-3, :-68]
     return x
@@ -437,4 +437,4 @@ def load_fns_pysteps(list_ID):
     R *= 12
     R_target *=12
 
-    return R, R_target, metadata
+    return R, R_target, metadata, metadata_target
