@@ -36,6 +36,9 @@ rtcor2npy(config.dir_rtcor, config.dir_rtcor_prep, overwrite = False, preprocess
 
 In the [config.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/config.py) change the path to your data (path_data) and to your project (path_project) to match your system. Furthermore the real-time dataset can have different names (rtcor or RAC). Check your data to see if the prefix of your data matches the one stated in the config file (prefix_rtcor).
 
+## Examples of running the model
+
+A minimal example of how to run the model can be seen in the [basic_run.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/examples/basic_run.py) file. The script I used to train the models can be found in the [testrun.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/testrun.py) file. This also contains code to setup logging with weights and biases and it uses the batchcreator to retrieve the training data.
 
 # GANs on Precipitation Data
 
