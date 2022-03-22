@@ -39,9 +39,3 @@ In the [config.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs
 ## Examples of running the model
 
 A minimal example of how to run the model can be seen in the [basic_run.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/examples/basic_run.py) file. The script I used to train the models can be found in the [testrun.py](https://github.com/KoertS/precipitation-nowcasting-using-GANs/blob/main/precipitation_forecasting/testrun.py) file. This also contains code to setup logging with weights and biases and it uses the batchcreator to retrieve the training data.
-
-# GANs on Precipitation Data
-
-[Here](https://github.com/KoertS/KNMI_Internship_GANs/tree/main/precipitation_forecasting) I work with the precipitation radar data. The real time (rtcor) data is matched with the Overreem data to create input output pairs. This is done in the [batchcreator](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/batchcreator.py) module. 
-The [model_builder](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/model_builder.py) is used to create a model. Currently I implemented a GAN model that is based the paper from [Tian et al.](https://ieeexplore.ieee.org/abstract/document/8777193) on precipitation nowcasting. 
-In [this](https://github.com/KoertS/KNMI_Internship_GANs/blob/main/precipitation_forecasting/testrun.ipynb) notebook I perform a test run to get an idea of the training time.
